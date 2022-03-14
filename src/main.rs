@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use octocrab::Octocrab;
 use serde_derive::Deserialize;
@@ -39,11 +39,12 @@ struct Prr {
 
 impl Prr {
     fn new(config_path: &Path, owner: String, repo: String, pr_num: u64) -> Result<Prr> {
-        let config_contents = fs::read_to_string(config_path)?;
-        let config: Config = toml::from_str(&config_contents)?;
+        let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
+        let config: Config = toml::from_str(&config_contents).context("Failed to parse toml")?;
         let octocrab = Octocrab::builder()
             .personal_token(config.prr.token)
-            .build()?;
+            .build()
+            .context("Failed to create GH client")?;
 
         Ok(Prr {
             crab: octocrab,
@@ -59,7 +60,8 @@ impl Prr {
             .crab
             .pulls(&self.owner, &self.repo)
             .get_patch(self.pr_num)
-            .await?;
+            .await
+            .context("Failed to fetch patch file")?;
 
         print!("{patch}");
 
