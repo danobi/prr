@@ -1,4 +1,6 @@
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -8,7 +10,10 @@ use serde_derive::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct PrrConfig {
+    /// GH personal token
     token: String,
+    /// Directory to place review files
+    workdir: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -25,10 +30,16 @@ struct Args {
     pr: String,
 }
 
-/// Main struct
+/// Main struct that coordinates all business logic and talks to GH
 struct Prr {
+    /// User config
+    config: Config,
     /// Instantiated github client
     crab: Octocrab,
+}
+
+/// Represents the state of a single review
+struct Review {
     /// Name of the owner of the repository
     owner: String,
     /// Name of the repository
@@ -37,35 +48,81 @@ struct Prr {
     pr_num: u64,
 }
 
+impl Review {
+    /// Creates a new `Review`
+    ///
+    /// `review_file` is the path where the user-facing review file should
+    /// be created. Additional metadata files (dotfiles) may be created in the same
+    /// directory.
+    fn new(workdir: &Path, patch: String, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
+        // First create directories leading up to review file if necessary
+        let mut review_path = workdir.to_path_buf();
+        review_path.push(owner);
+        review_path.push(repo);
+        fs::create_dir_all(&review_path).context("Failed to create workdir directories")?;
+
+        // Now create review file
+        review_path.push(pr_num.to_string());
+        let mut review = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&review_path)
+            .context("Failed to create review file")?;
+        // XXX: prefix all patch lines with `>`
+        review
+            .write_all(patch.as_bytes())
+            .context("Failed to write review file")?;
+
+        // XXX: create metadata file (json) with orig contents and other info
+
+        Ok(Review {
+            owner: owner.to_owned(),
+            repo: repo.to_owned(),
+            pr_num,
+        })
+    }
+}
+
 impl Prr {
-    fn new(config_path: &Path, owner: String, repo: String, pr_num: u64) -> Result<Prr> {
+    fn new(config_path: &Path) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
         let config: Config = toml::from_str(&config_contents).context("Failed to parse toml")?;
         let octocrab = Octocrab::builder()
-            .personal_token(config.prr.token)
+            .personal_token(config.prr.token.clone())
             .build()
             .context("Failed to create GH client")?;
 
         Ok(Prr {
+            config: config,
             crab: octocrab,
-            owner,
-            repo,
-            pr_num,
         })
     }
 
-    // XXX: save it to somewhere on disk instead of printing to stdout
-    async fn fetch_patch(&self) -> Result<()> {
+    fn workdir(&self) -> Result<PathBuf> {
+        match &self.config.prr.workdir {
+            Some(d) => {
+                if d.starts_with("~") {
+                    bail!("Workdir may not use '~' to denote home directory");
+                }
+
+                Ok(Path::new(d).to_path_buf())
+            }
+            None => {
+                let xdg_dirs = xdg::BaseDirectories::with_prefix("prr")?;
+                Ok(xdg_dirs.get_data_home())
+            }
+        }
+    }
+
+    async fn fetch_patch(&self, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
         let patch = self
             .crab
-            .pulls(&self.owner, &self.repo)
-            .get_patch(self.pr_num)
+            .pulls(owner, repo)
+            .get_patch(pr_num)
             .await
             .context("Failed to fetch patch file")?;
 
-        print!("{patch}");
-
-        Ok(())
+        Review::new(&self.workdir()?, patch, owner, repo, pr_num)
     }
 }
 
@@ -97,11 +154,9 @@ async fn main() -> Result<()> {
         }
     };
 
+    let prr = Prr::new(&config_path)?;
     let (owner, repo, pr_num) = parse_pr_str(&args.pr)?;
-    let prr = Prr::new(&config_path, owner, repo, pr_num)?;
-
-    // XXX: delete
-    prr.fetch_patch().await?;
+    let _ = prr.fetch_patch(&owner, &repo, pr_num).await?;
 
     Ok(())
 }
