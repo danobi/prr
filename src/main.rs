@@ -3,7 +3,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use octocrab::Octocrab;
 use serde_derive::Deserialize;
@@ -40,6 +40,8 @@ struct Prr {
 
 /// Represents the state of a single review
 struct Review {
+    /// Path to workdir
+    workdir: PathBuf,
     /// Name of the owner of the repository
     owner: String,
     /// Name of the repository
@@ -55,31 +57,44 @@ impl Review {
     /// be created. Additional metadata files (dotfiles) may be created in the same
     /// directory.
     fn new(workdir: &Path, patch: String, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
+        let review = Review {
+            workdir: workdir.to_owned(),
+            owner: owner.to_owned(),
+            repo: repo.to_owned(),
+            pr_num,
+        };
+
         // First create directories leading up to review file if necessary
-        let mut review_path = workdir.to_path_buf();
-        review_path.push(owner);
-        review_path.push(repo);
-        fs::create_dir_all(&review_path).context("Failed to create workdir directories")?;
+        let review_path = review.path();
+        let review_dir = review_path
+            .parent()
+            .ok_or_else(|| anyhow!("Review path has no parent!"))?;
+        fs::create_dir_all(&review_dir).context("Failed to create workdir directories")?;
 
         // Now create review file
-        review_path.push(pr_num.to_string());
-        let mut review = OpenOptions::new()
+        let mut review_file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&review_path)
             .context("Failed to create review file")?;
         // XXX: prefix all patch lines with `>`
-        review
+        review_file
             .write_all(patch.as_bytes())
             .context("Failed to write review file")?;
 
         // XXX: create metadata file (json) with orig contents and other info
 
-        Ok(Review {
-            owner: owner.to_owned(),
-            repo: repo.to_owned(),
-            pr_num,
-        })
+        Ok(review)
+    }
+
+    /// Returns path to user-facing review file
+    fn path(&self) -> PathBuf {
+        let mut p = self.workdir.clone();
+        p.push(&self.owner);
+        p.push(&self.repo);
+        p.push(self.pr_num.to_string());
+
+        p
     }
 }
 
@@ -93,7 +108,7 @@ impl Prr {
             .context("Failed to create GH client")?;
 
         Ok(Prr {
-            config: config,
+            config,
             crab: octocrab,
         })
     }
@@ -101,7 +116,7 @@ impl Prr {
     fn workdir(&self) -> Result<PathBuf> {
         match &self.config.prr.workdir {
             Some(d) => {
-                if d.starts_with("~") {
+                if d.starts_with('~') {
                     bail!("Workdir may not use '~' to denote home directory");
                 }
 
