@@ -4,7 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use octocrab::Octocrab;
 use serde_derive::{Deserialize, Serialize};
 
@@ -21,13 +21,27 @@ struct Config {
     prr: PrrConfig,
 }
 
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Get a pull request and begin a review
+    Get {
+        /// Pull request to review (eg. `danobi/prr/24`)
+        pr: String,
+    },
+    /// Submit a review
+    Submit {
+        /// Pull request to review (eg. `danobi/prr/24`)
+        pr: String,
+    },
+}
+
 #[derive(Parser, Debug)]
 struct Args {
     /// Path to config file
     #[clap(long, parse(from_os_str))]
     config: Option<PathBuf>,
-    /// Pull request to review (eg. `danobi/prr/24`)
-    pr: String,
+    #[clap(subcommand)]
+    command: Command,
 }
 
 /// Main struct that coordinates all business logic and talks to GH
@@ -58,7 +72,9 @@ struct ReviewMetadata {
 }
 
 fn prefix_lines(s: &str, prefix: &str) -> String {
-    s.lines().map(|line| prefix.to_owned() + line + "\n").collect()
+    s.lines()
+        .map(|line| prefix.to_owned() + line + "\n")
+        .collect()
 }
 
 impl Review {
@@ -153,7 +169,7 @@ impl Prr {
         }
     }
 
-    async fn fetch_diff(&self, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
+    async fn get_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
         let diff = self
             .crab
             .pulls(owner, repo)
@@ -194,8 +210,14 @@ async fn main() -> Result<()> {
     };
 
     let prr = Prr::new(&config_path)?;
-    let (owner, repo, pr_num) = parse_pr_str(&args.pr)?;
-    let _ = prr.fetch_diff(&owner, &repo, pr_num).await?;
+
+    match args.command {
+        Command::Get { pr } => {
+            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            prr.get_pr(&owner, &repo, pr_num).await?;
+        }
+        Command::Submit { pr: _ } => {}
+    }
 
     Ok(())
 }
