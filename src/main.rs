@@ -57,6 +57,10 @@ struct ReviewMetadata {
     original: String,
 }
 
+fn prefix_lines(s: &str, prefix: &str) -> String {
+    s.lines().map(|line| prefix.to_owned() + line + "\n").collect()
+}
+
 impl Review {
     /// Creates a new `Review`
     ///
@@ -84,9 +88,9 @@ impl Review {
             .create_new(true)
             .open(&review_path)
             .context("Failed to create review file")?;
-        // XXX: prefix all diff lines with `>`
+        let review_contents = prefix_lines(&diff, "> ");
         review_file
-            .write_all(diff.as_bytes())
+            .write_all(review_contents.as_bytes())
             .context("Failed to write review file")?;
 
         // Create metadata file
