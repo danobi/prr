@@ -1,8 +1,8 @@
 # TODO
 
--[ ] Parse review files
-    -[ ] Create parser
-    -[ ] Create `include_str!()` based unit-tests for expected comments
+- [ ] Parse review files
+    - [ ] Create parser
+    - [ ] Create `include_str!()` based unit-tests for expected comments
 
 
 # Thoughts
