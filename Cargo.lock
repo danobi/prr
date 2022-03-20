@@ -807,6 +807,7 @@ dependencies = [
  "octocrab",
  "serde",
  "serde_derive",
+ "serde_json",
  "tokio",
  "toml",
  "xdg",

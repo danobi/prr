@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use octocrab::Octocrab;
-use serde_derive::Deserialize;
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 struct PrrConfig {
@@ -50,6 +50,13 @@ struct Review {
     pr_num: u64,
 }
 
+/// Metadata for a single review. Stored as dotfile next to user-facing review file
+#[derive(Serialize, Deserialize, Debug)]
+struct ReviewMetadata {
+    /// Original .patch file contents. Used to detect corrupted review files
+    original: String,
+}
+
 impl Review {
     /// Creates a new `Review`
     ///
@@ -82,7 +89,19 @@ impl Review {
             .write_all(patch.as_bytes())
             .context("Failed to write review file")?;
 
-        // XXX: create metadata file (json) with orig contents and other info
+        // Create metadata file
+        let metadata = ReviewMetadata { original: patch };
+        let json = serde_json::to_string(&metadata)?;
+        let mut metadata_path = review_path.clone();
+        metadata_path.set_file_name(format!(".{}", pr_num));
+        let mut metadata_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&metadata_path)
+            .context("Failed to create metdata file")?;
+        metadata_file
+            .write_all(json.as_bytes())
+            .context("Failed to write metadata file")?;
 
         Ok(review)
     }
