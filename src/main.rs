@@ -53,7 +53,7 @@ struct Review {
 /// Metadata for a single review. Stored as dotfile next to user-facing review file
 #[derive(Serialize, Deserialize, Debug)]
 struct ReviewMetadata {
-    /// Original .patch file contents. Used to detect corrupted review files
+    /// Original .diff file contents. Used to detect corrupted review files
     original: String,
 }
 
@@ -63,7 +63,7 @@ impl Review {
     /// `review_file` is the path where the user-facing review file should
     /// be created. Additional metadata files (dotfiles) may be created in the same
     /// directory.
-    fn new(workdir: &Path, patch: String, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
+    fn new(workdir: &Path, diff: String, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
         let review = Review {
             workdir: workdir.to_owned(),
             owner: owner.to_owned(),
@@ -84,21 +84,22 @@ impl Review {
             .create_new(true)
             .open(&review_path)
             .context("Failed to create review file")?;
-        // XXX: prefix all patch lines with `>`
+        // XXX: prefix all diff lines with `>`
         review_file
-            .write_all(patch.as_bytes())
+            .write_all(diff.as_bytes())
             .context("Failed to write review file")?;
 
         // Create metadata file
-        let metadata = ReviewMetadata { original: patch };
+        let metadata = ReviewMetadata { original: diff };
         let json = serde_json::to_string(&metadata)?;
         let mut metadata_path = review_path.clone();
         metadata_path.set_file_name(format!(".{}", pr_num));
         let mut metadata_file = OpenOptions::new()
             .write(true)
-            .create_new(true)
+            .create(true)
+            .truncate(true)
             .open(&metadata_path)
-            .context("Failed to create metdata file")?;
+            .context("Failed to create metadata file")?;
         metadata_file
             .write_all(json.as_bytes())
             .context("Failed to write metadata file")?;
@@ -148,15 +149,15 @@ impl Prr {
         }
     }
 
-    async fn fetch_patch(&self, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
-        let patch = self
+    async fn fetch_diff(&self, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
+        let diff = self
             .crab
             .pulls(owner, repo)
-            .get_patch(pr_num)
+            .get_diff(pr_num)
             .await
-            .context("Failed to fetch patch file")?;
+            .context("Failed to fetch diff")?;
 
-        Review::new(&self.workdir()?, patch, owner, repo, pr_num)
+        Review::new(&self.workdir()?, diff, owner, repo, pr_num)
     }
 }
 
@@ -190,7 +191,7 @@ async fn main() -> Result<()> {
 
     let prr = Prr::new(&config_path)?;
     let (owner, repo, pr_num) = parse_pr_str(&args.pr)?;
-    let _ = prr.fetch_patch(&owner, &repo, pr_num).await?;
+    let _ = prr.fetch_diff(&owner, &repo, pr_num).await?;
 
     Ok(())
 }
