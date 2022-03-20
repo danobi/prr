@@ -3,6 +3,8 @@
 - [ ] Parse review files
     - [ ] Create parser
     - [ ] Create `include_str!()` based unit-tests for expected comments
+        - [ ] Test invalid spans (span that does not have a comment that
+              terminates it and another span starts)
 - [ ] Manual test that comments on a changed file work
 
 # Thoughts

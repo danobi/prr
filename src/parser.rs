@@ -1,14 +1,5 @@
 use anyhow::Result;
 
-enum State {
-    Start,
-}
-
-/// Simple state machine to parse a review file
-pub struct ReviewParser {
-    state: State,
-}
-
 /// Represents a single comment on a review
 #[derive(Debug, PartialEq)]
 pub struct ReviewComment {
@@ -29,6 +20,37 @@ pub struct ReviewComment {
     comment: String,
 }
 
+struct FileDiffState {
+    /// Current position. See `ReviewComment::position` for docs on semantics of `position`
+    position: u64,
+    /// Position of the start of the span. See `ReviewComment::position` for docs on
+    /// semantics of `position`
+    span_start_position: Option<u64>,
+}
+
+struct CommentState {
+    /// State of the file diff before we entered comment processing
+    file_diff_state: FileDiffState,
+    /// Each line of comment is stored as an entry
+    comment: Vec<String>,
+}
+
+enum State {
+    /// Starting state
+    Start,
+    /// The `diff --git a/...` preamble as well as the lines before the first hunk
+    FilePreamble,
+    /// We are inside the diff of a file
+    FileDiff(FileDiffState),
+    /// We are inside a user-supplied comment
+    Comment(CommentState),
+}
+
+/// Simple state machine to parse a review file
+pub struct ReviewParser {
+    state: State,
+}
+
 impl ReviewParser {
     pub fn new() -> ReviewParser {
         ReviewParser {
@@ -36,7 +58,7 @@ impl ReviewParser {
         }
     }
 
-    pub fn parse_line(&mut self, line: &str) -> Result<Option<ReviewComment>> {
+    pub fn parse_line(&mut self, _line: &str) -> Result<Option<ReviewComment>> {
         // XXX: implement
         unimplemented!();
     }
