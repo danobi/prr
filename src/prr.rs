@@ -72,7 +72,11 @@ impl Prr {
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let _comments = review.comments()?;
+        let comments = review.comments()?;
+
+        for comment in comments {
+            println!("{:#?}", comment);
+        }
 
         // XXX: submit comments to GH in a single API call (POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews)
 

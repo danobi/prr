@@ -3,7 +3,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::parser::{ReviewComment, ReviewParser};
@@ -105,11 +105,10 @@ impl Review {
     /// Parse the user-supplied comments on a review
     pub fn comments(&self) -> Result<Vec<ReviewComment>> {
         let contents = fs::read_to_string(self.path()).context("Failed to read review file")?;
+        self.validate_review_file(&contents)?;
+
         let mut parser = ReviewParser::new();
         let mut comments = Vec::new();
-
-        // XXX: validate review file by comparing quoted lines to original stored in metadata
-
         for line in contents.lines() {
             let res = parser.parse_line(line).context("Failed to parse review")?;
             if let Some(c) = res {
@@ -118,6 +117,29 @@ impl Review {
         }
 
         Ok(comments)
+    }
+
+    /// Validates whether the user corrupted the quoted contents
+    fn validate_review_file(&self, contents: &str) -> Result<()> {
+        let mut reconstructed = String::with_capacity(contents.len());
+        for line in contents.lines() {
+            if let Some(stripped) = line.strip_prefix("> ") {
+                reconstructed += stripped;
+                reconstructed += "\n";
+            }
+        }
+
+        let mut metadata_path = self.path();
+        metadata_path.set_file_name(format!(".{}", self.pr_num));
+        let data = fs::read_to_string(metadata_path).context("Failed to read metadata file")?;
+        let metadata: ReviewMetadata =
+            serde_json::from_str(&data).context("Failed to parse metadata json")?;
+
+        if reconstructed != metadata.original {
+            bail!("Detected corruption in quoted part of review file");
+        }
+
+        Ok(())
     }
 
     /// Returns path to user-facing review file
