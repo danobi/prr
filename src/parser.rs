@@ -181,7 +181,7 @@ impl ReviewParser {
                 } else {
                     self.state = State::Comment(CommentState {
                         file_diff_state: state.clone(),
-                        comment: Vec::new(),
+                        comment: vec![line.to_owned()],
                     })
                 }
 
@@ -205,7 +205,7 @@ impl ReviewParser {
                     // In a comment now
                     self.state = State::Comment(CommentState {
                         file_diff_state: state.file_diff_state.clone(),
-                        comment: Vec::new(),
+                        comment: vec![line.to_owned()],
                     });
 
                     Ok(None)
@@ -217,7 +217,7 @@ impl ReviewParser {
                         file: state.file_diff_state.file.clone(),
                         position: state.file_diff_state.position,
                         start_position: state.file_diff_state.span_start_position,
-                        comment: state.comment.join("\n"),
+                        comment: state.comment.join("\n").trim_end().to_string(),
                     };
 
                     if is_diff_header(line) {
