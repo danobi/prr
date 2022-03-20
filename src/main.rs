@@ -71,6 +71,26 @@ struct ReviewMetadata {
     original: String,
 }
 
+/// Represents a single comment on a review
+#[derive(Debug, PartialEq)]
+struct ReviewComment {
+    /// File the comment is in
+    ///
+    /// Note that this is the new filename if the file was also moved
+    file: String,
+    /// The "line" a comment applies to. To quote github API:
+    ///
+    /// The position value equals the number of lines down from the first "@@" hunk header in the
+    /// file you want to add a comment. The line just below the "@@" line is position 1, the next
+    /// line is position 2, and so on. The position in the diff continues to increase through lines
+    /// of whitespace and additional hunks until the beginning of a new file.
+    position: u64,
+    /// For a spanned comment, the first line of the span. See `position` for docs on semantics
+    start_position: Option<u64>,
+    /// The user-supplied review comment
+    comment: String,
+}
+
 fn prefix_lines(s: &str, prefix: &str) -> String {
     s.lines()
         .map(|line| prefix.to_owned() + line + "\n")
@@ -127,6 +147,25 @@ impl Review {
         Ok(review)
     }
 
+    /// Creates a `Review` that already exists on disk
+    ///
+    /// Note we do not check that anything actually exists on disk because that is
+    /// inherently racy. We'll handle ENOENT errors when we actually use any files.
+    fn new_existing(workdir: &Path, owner: &str, repo: &str, pr_num: u64) -> Review {
+        Review {
+            workdir: workdir.to_owned(),
+            owner: owner.to_owned(),
+            repo: repo.to_owned(),
+            pr_num,
+        }
+    }
+
+    /// Parse the user-supplied comments on a review
+    fn comments(&self) -> Result<Vec<ReviewComment>> {
+        // XXX: implement
+        unimplemented!();
+    }
+
     /// Returns path to user-facing review file
     fn path(&self) -> PathBuf {
         let mut p = self.workdir.clone();
@@ -179,6 +218,15 @@ impl Prr {
 
         Review::new(&self.workdir()?, diff, owner, repo, pr_num)
     }
+
+    async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
+        let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
+        let _comments = review.comments()?;
+
+        // XXX: submit comments to GH in a single API call (POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews)
+
+        Ok(())
+    }
 }
 
 /// Parses a PR string in the form of `danobi/prr/24` and returns
@@ -216,7 +264,10 @@ async fn main() -> Result<()> {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             prr.get_pr(&owner, &repo, pr_num).await?;
         }
-        Command::Submit { pr: _ } => {}
+        Command::Submit { pr } => {
+            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            prr.submit_pr(&owner, &repo, pr_num).await?;
+        }
     }
 
     Ok(())

@@ -3,7 +3,7 @@
 - [ ] Parse review files
     - [ ] Create parser
     - [ ] Create `include_str!()` based unit-tests for expected comments
-
+- [ ] Manual test that comments on a changed file work
 
 # Thoughts
 
