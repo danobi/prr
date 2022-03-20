@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 /// Represents a single comment on a review
 #[derive(Debug, PartialEq)]
@@ -20,12 +20,25 @@ pub struct ReviewComment {
     comment: String,
 }
 
+struct FilePreambleState {
+    /// Relative path of the file under diff
+    file: String,
+}
+
+#[derive(Clone)]
 struct FileDiffState {
+    /// Relative path of the file under diff
+    file: String,
     /// Current position. See `ReviewComment::position` for docs on semantics of `position`
     position: u64,
     /// Position of the start of the span. See `ReviewComment::position` for docs on
     /// semantics of `position`
     span_start_position: Option<u64>,
+}
+
+struct SpanStartOrCommentState {
+    /// State of the file diff before we entered this state
+    file_diff_state: FileDiffState,
 }
 
 struct CommentState {
@@ -35,13 +48,32 @@ struct CommentState {
     comment: Vec<String>,
 }
 
+/// State machine states
+///
+/// Only the following state transitions are valid:
+///
+///                                  +---------------+
+///                                  |               |
+///                                  v               |
+///     Start -> FilePreamble -> FileDiff -> StartSpanOrComment -> Comment
+///                 ^    ^        |  | ^                            ^   |
+///                 |    |        |  | |                            |   |
+///                 |    +--------+--+-+----------------------------+---+
+///                 |             |  |                              |
+///                 +-------------+  +------------------------------+
+///
 enum State {
     /// Starting state
     Start,
     /// The `diff --git a/...` preamble as well as the lines before the first hunk
-    FilePreamble,
+    FilePreamble(FilePreambleState),
     /// We are inside the diff of a file
     FileDiff(FileDiffState),
+    /// We are either the start of a span or the beginning of a comment
+    ///
+    /// The uncertainty comes from the fact that comments typically begin with one
+    /// or more newlines
+    SpanStartOrComment(SpanStartOrCommentState),
     /// We are inside a user-supplied comment
     Comment(CommentState),
 }
@@ -51,6 +83,31 @@ pub struct ReviewParser {
     state: State,
 }
 
+fn is_diff_header(s: &str) -> bool {
+    s.starts_with("diff --git ")
+}
+
+/// Parses the new filename out of a diff header
+fn parse_diff_header(line: &str) -> Result<String> {
+    let parts: Vec<&str> = line.split(' ').collect();
+    if parts.len() != 4 {
+        bail!(
+            "Invalid diff header: expected 4 parts, found {}",
+            parts.len()
+        );
+    }
+
+    // Final part of diff header will be something like:
+    //
+    //      `b/path/to/file`
+    //
+    if !parts[3].starts_with("b/") {
+        bail!("Invalid diff header: final file path does not begin with 'b/'");
+    }
+
+    Ok(parts[3][2..].trim().to_owned())
+}
+
 impl ReviewParser {
     pub fn new() -> ReviewParser {
         ReviewParser {
@@ -58,8 +115,129 @@ impl ReviewParser {
         }
     }
 
-    pub fn parse_line(&mut self, _line: &str) -> Result<Option<ReviewComment>> {
-        // XXX: implement
-        unimplemented!();
+    pub fn parse_line(&mut self, mut line: &str) -> Result<Option<ReviewComment>> {
+        let is_quoted = line.starts_with("> ");
+        if is_quoted {
+            line = &line[2..];
+        }
+
+        match &mut self.state {
+            State::Start => {
+                if !is_quoted {
+                    bail!("Unexpected comment in start state");
+                }
+
+                if !is_diff_header(line) {
+                    bail!("Expected diff header from start state, found '{}'", line);
+                }
+
+                self.state = State::FilePreamble(FilePreambleState {
+                    file: parse_diff_header(line)?,
+                });
+
+                Ok(None)
+            }
+            State::FilePreamble(state) => {
+                if !is_quoted {
+                    bail!("Unexpected comment in file preamble state");
+                }
+
+                if let Some(stripped) = line.strip_prefix("@@ ") {
+                    // Extra sanity check; the start of a hunk should look like:
+                    //
+                    //      `@@ -731,7 +731,7 @@ [...]`
+                    //
+                    if stripped.contains(" @@ ") {
+                        self.state = State::FileDiff(FileDiffState {
+                            file: state.file.to_owned(),
+                            position: 0,
+                            span_start_position: None,
+                        });
+                    }
+                }
+
+                Ok(None)
+            }
+            State::FileDiff(state) => {
+                if is_quoted {
+                    if is_diff_header(line) {
+                        self.state = State::FilePreamble(FilePreambleState {
+                            file: parse_diff_header(line)?,
+                        });
+                    } else {
+                        state.position += 1;
+                    }
+
+                    return Ok(None);
+                }
+
+                // Now that we know this line is not quoted, there's only two options:
+                // 1) beginning of a spanned comment
+                // 2) beginning of a comment
+                if line.trim().is_empty() {
+                    self.state = State::SpanStartOrComment(SpanStartOrCommentState {
+                        file_diff_state: state.clone(),
+                    })
+                } else {
+                    self.state = State::Comment(CommentState {
+                        file_diff_state: state.clone(),
+                        comment: Vec::new(),
+                    })
+                }
+
+                Ok(None)
+            }
+            State::SpanStartOrComment(state) => {
+                if is_quoted {
+                    // Back to the original file diff
+                    let next_pos = state.file_diff_state.position + 1;
+                    self.state = State::FileDiff(FileDiffState {
+                        file: state.file_diff_state.file.to_owned(),
+                        position: next_pos,
+                        span_start_position: Some(next_pos),
+                    });
+
+                    Ok(None)
+                } else if line.trim().is_empty() {
+                    // In a multi-line span spart
+                    Ok(None)
+                } else {
+                    // In a comment now
+                    self.state = State::Comment(CommentState {
+                        file_diff_state: state.file_diff_state.clone(),
+                        comment: Vec::new(),
+                    });
+
+                    Ok(None)
+                }
+            }
+            State::Comment(state) => {
+                if is_quoted {
+                    let comment = ReviewComment {
+                        file: state.file_diff_state.file.clone(),
+                        position: state.file_diff_state.position,
+                        start_position: state.file_diff_state.span_start_position,
+                        comment: state.comment.join("\n"),
+                    };
+
+                    if is_diff_header(line) {
+                        self.state = State::FilePreamble(FilePreambleState {
+                            file: parse_diff_header(line)?,
+                        });
+                    } else {
+                        self.state = State::FileDiff(FileDiffState {
+                            file: state.file_diff_state.file.to_owned(),
+                            position: state.file_diff_state.position + 1,
+                            span_start_position: None,
+                        });
+                    }
+
+                    return Ok(Some(comment));
+                }
+
+                state.comment.push(line.to_owned());
+                Ok(None)
+            }
+        }
     }
 }

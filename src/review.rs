@@ -108,6 +108,8 @@ impl Review {
         let mut parser = ReviewParser::new();
         let mut comments = Vec::new();
 
+        // XXX: validate review file by comparing quoted lines to original stored in metadata
+
         for line in contents.lines() {
             let res = parser.parse_line(line).context("Failed to parse review")?;
             if let Some(c) = res {
