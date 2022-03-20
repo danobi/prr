@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 
+use crate::parser::{ReviewComment, ReviewParser};
+
 /// Represents the state of a single review
 pub struct Review {
     /// Path to workdir
@@ -23,26 +25,6 @@ pub struct Review {
 struct ReviewMetadata {
     /// Original .diff file contents. Used to detect corrupted review files
     original: String,
-}
-
-/// Represents a single comment on a review
-#[derive(Debug, PartialEq)]
-pub struct ReviewComment {
-    /// File the comment is in
-    ///
-    /// Note that this is the new filename if the file was also moved
-    file: String,
-    /// The "line" a comment applies to. To quote github API:
-    ///
-    /// The position value equals the number of lines down from the first "@@" hunk header in the
-    /// file you want to add a comment. The line just below the "@@" line is position 1, the next
-    /// line is position 2, and so on. The position in the diff continues to increase through lines
-    /// of whitespace and additional hunks until the beginning of a new file.
-    position: u64,
-    /// For a spanned comment, the first line of the span. See `position` for docs on semantics
-    start_position: Option<u64>,
-    /// The user-supplied review comment
-    comment: String,
 }
 
 fn prefix_lines(s: &str, prefix: &str) -> String {
@@ -122,8 +104,18 @@ impl Review {
 
     /// Parse the user-supplied comments on a review
     pub fn comments(&self) -> Result<Vec<ReviewComment>> {
-        // XXX: implement
-        unimplemented!();
+        let contents = fs::read_to_string(self.path()).context("Failed to read review file")?;
+        let mut parser = ReviewParser::new();
+        let mut comments = Vec::new();
+
+        for line in contents.lines() {
+            let res = parser.parse_line(line).context("Failed to parse review")?;
+            if let Some(c) = res {
+                comments.push(c);
+            }
+        }
+
+        Ok(comments)
     }
 
     /// Returns path to user-facing review file

@@ -3,8 +3,10 @@ use std::path::PathBuf;
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 
+mod parser;
 mod prr;
 mod review;
+
 use prr::Prr;
 
 #[derive(Subcommand, Debug)]
