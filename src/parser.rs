@@ -256,10 +256,11 @@ mod tests {
             }
         }
 
-        assert_eq!(
-            comments, expected,
-            "Parsed different comments than expected. Got: {:#?}, expected {:#?}",
-            comments, expected
+        assert!(
+            comments == expected,
+            "Parsed different comments than expected.\n Got: {:#?}\nExpected: {:#?}",
+            comments,
+            expected
         );
     }
 
