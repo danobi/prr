@@ -241,3 +241,38 @@ impl ReviewParser {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test(input: &str, expected: &[ReviewComment]) {
+        let mut parser = ReviewParser::new();
+        let mut comments = Vec::new();
+
+        for line in input.lines() {
+            if let Some(c) = parser.parse_line(line).unwrap() {
+                comments.push(c);
+            }
+        }
+
+        assert_eq!(
+            comments, expected,
+            "Parsed different comments than expected. Got: {:#?}, expected {:#?}",
+            comments, expected
+        );
+    }
+
+    #[test]
+    fn single_comment() {
+        let input = include_str!("../testdata/single_comment");
+        let expected = vec![ReviewComment {
+            file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+            position: 5,
+            start_position: Some(1),
+            comment: "Comment 1".to_string(),
+        }];
+
+        test(input, &expected);
+    }
+}
