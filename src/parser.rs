@@ -189,6 +189,10 @@ impl ReviewParser {
             }
             State::SpanStartOrComment(state) => {
                 if is_quoted {
+                    if state.file_diff_state.span_start_position.is_some() {
+                        bail!("Detected span that was not terminated with a comment");
+                    }
+
                     // Back to the original file diff
                     let next_pos = state.file_diff_state.position + 1;
                     self.state = State::FileDiff(FileDiffState {
@@ -245,6 +249,18 @@ impl ReviewParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_fail(input: &str) {
+        let mut parser = ReviewParser::new();
+
+        for line in input.lines() {
+            if let Err(_) = parser.parse_line(line) {
+                return;
+            }
+        }
+
+        panic!("Parser succeeded when it should have failed");
+    }
 
     fn test(input: &str, expected: &[ReviewComment]) {
         let mut parser = ReviewParser::new();
@@ -321,13 +337,6 @@ mod tests {
     #[test]
     fn unterminated_back_to_back_span() {
         let input = include_str!("../testdata/unterminated_back_to_back_span");
-        let expected = vec![ReviewComment {
-            file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-            position: 8,
-            start_position: Some(6),
-            comment: "Comment 1".to_string(),
-        }];
-
-        test(input, &expected);
+        test_fail(input);
     }
 }
