@@ -5,6 +5,7 @@
     - [x] Create `include_str!()` based unit-tests for expected comments
         - [x] Test invalid spans (span that does not have a comment that
               terminates it and another span starts)
+- [ ] Wire up comment uploading to GH
 - [ ] Manual test that comments on a changed file work
 
 # Thoughts
