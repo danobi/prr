@@ -1,9 +1,9 @@
 # TODO
 
-- [ ] Parse review files
+- [x] Parse review files
     - [x] Create parser
     - [x] Create `include_str!()` based unit-tests for expected comments
-        - [ ] Test invalid spans (span that does not have a comment that
+        - [x] Test invalid spans (span that does not have a comment that
               terminates it and another span starts)
 - [ ] Manual test that comments on a changed file work
 

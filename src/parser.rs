@@ -276,4 +276,58 @@ mod tests {
 
         test(input, &expected);
     }
+
+    #[test]
+    fn back_to_back_span() {
+        let input = include_str!("../testdata/back_to_back_span");
+        let expected = vec![
+            ReviewComment {
+                file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+                position: 5,
+                start_position: Some(1),
+                comment: "Comment 1".to_string(),
+            },
+            ReviewComment {
+                file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+                position: 8,
+                start_position: None,
+                comment: "Comment 2".to_string(),
+            },
+        ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn unterminated_span() {
+        let input = include_str!("../testdata/unterminated_span");
+        let expected = vec![];
+        test(input, &expected);
+    }
+
+    #[test]
+    fn cross_file_span_ignored() {
+        let input = include_str!("../testdata/cross_file_span_ignored");
+        let expected = vec![ReviewComment {
+            file: "libbpf-cargo/src/test.rs".to_string(),
+            position: 12,
+            start_position: None,
+            comment: "Comment 1".to_string(),
+        }];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn unterminated_back_to_back_span() {
+        let input = include_str!("../testdata/unterminated_back_to_back_span");
+        let expected = vec![ReviewComment {
+            file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+            position: 8,
+            start_position: Some(6),
+            comment: "Comment 1".to_string(),
+        }];
+
+        test(input, &expected);
+    }
 }
