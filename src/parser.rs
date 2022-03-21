@@ -294,6 +294,19 @@ mod tests {
     }
 
     #[test]
+    fn multiline_comment() {
+        let input = include_str!("../testdata/multiline_comment");
+        let expected = vec![ReviewComment {
+            file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+            position: 7,
+            start_position: None,
+            comment: "Comment line 1\nComment line 2\n\nComment line 4".to_string(),
+        }];
+
+        test(input, &expected);
+    }
+
+    #[test]
     fn back_to_back_span() {
         let input = include_str!("../testdata/back_to_back_span");
         let expected = vec![
@@ -306,6 +319,27 @@ mod tests {
             ReviewComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
                 position: 8,
+                start_position: None,
+                comment: "Comment 2".to_string(),
+            },
+        ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn multiple_files() {
+        let input = include_str!("../testdata/multiple_files");
+        let expected = vec![
+            ReviewComment {
+                file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+                position: 5,
+                start_position: None,
+                comment: "Comment 1".to_string(),
+            },
+            ReviewComment {
+                file: "libbpf-cargo/src/test.rs".to_string(),
+                position: 15,
                 start_position: None,
                 comment: "Comment 2".to_string(),
             },
