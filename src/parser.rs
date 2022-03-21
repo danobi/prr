@@ -139,7 +139,10 @@ impl ReviewParser {
             }
             State::FilePreamble(state) => {
                 if !is_quoted {
-                    bail!("Unexpected comment in file preamble state");
+                    bail!(
+                        "Unexpected comment in file preamble state, file: {}",
+                        state.file
+                    );
                 }
 
                 if let Some(stripped) = line.strip_prefix("@@ ") {
@@ -162,7 +165,10 @@ impl ReviewParser {
                 if is_quoted {
                     if is_diff_header(line) {
                         if state.span_start_position.is_some() {
-                            bail!("Detected span that was not terminated with a comment");
+                            bail!(
+                                "Detected span that was not terminated with a comment, file: {}",
+                                state.file
+                            );
                         }
 
                         self.state = State::FilePreamble(FilePreambleState {
@@ -194,7 +200,10 @@ impl ReviewParser {
             State::SpanStartOrComment(state) => {
                 if is_quoted {
                     if state.file_diff_state.span_start_position.is_some() {
-                        bail!("Detected span that was not terminated with a comment");
+                        bail!(
+                            "Detected span that was not terminated with a comment, file: {}",
+                            state.file_diff_state.file
+                        );
                     }
 
                     // Back to the original file diff
