@@ -161,6 +161,10 @@ impl ReviewParser {
             State::FileDiff(state) => {
                 if is_quoted {
                     if is_diff_header(line) {
+                        if state.span_start_position.is_some() {
+                            bail!("Detected span that was not terminated with a comment");
+                        }
+
                         self.state = State::FilePreamble(FilePreambleState {
                             file: parse_diff_header(line)?,
                         });
@@ -351,21 +355,13 @@ mod tests {
     #[test]
     fn unterminated_span() {
         let input = include_str!("../testdata/unterminated_span");
-        let expected = vec![];
-        test(input, &expected);
+        test_fail(input);
     }
 
     #[test]
     fn cross_file_span_ignored() {
         let input = include_str!("../testdata/cross_file_span_ignored");
-        let expected = vec![ReviewComment {
-            file: "libbpf-cargo/src/test.rs".to_string(),
-            position: 12,
-            start_position: None,
-            comment: "Comment 1".to_string(),
-        }];
-
-        test(input, &expected);
+        test_fail(input);
     }
 
     #[test]
