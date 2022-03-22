@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use octocrab::Octocrab;
 use serde_derive::Deserialize;
+use serde_json::{json, Value};
 
 use crate::review::Review;
 
@@ -74,12 +75,40 @@ impl Prr {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let comments = review.comments()?;
 
-        for comment in comments {
-            println!("{:#?}", comment);
+        let body = json!({
+            "body": "",
+            "event": "COMMENT",
+            "comments": comments
+                .iter()
+                .map(|c| {
+                    let mut json_comment = json!({
+                        "path": c.file,
+                        "line": c.position,
+                        "body": c.comment,
+                    });
+                    if let Some(start_position) = c.start_position {
+                        json_comment["start_line"] = start_position.into();
+                    }
+
+                    json_comment
+                })
+                .collect::<Vec<Value>>(),
+        });
+
+        let path = format!("/repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
+        match self
+            .crab
+            ._post(self.crab.absolute_url(path)?, Some(&body))
+            .await
+        {
+            Ok(_) => Ok(()),
+            // GH is known to send unescaped control characters in JSON responses which
+            // serde will fail to parse (not that it should succeed)
+            Err(octocrab::Error::Json {
+                source: _,
+                backtrace: _,
+            }) => Ok(()),
+            Err(e) => bail!("Error during POST: {}", e),
         }
-
-        // XXX: submit comments to GH in a single API call (POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews)
-
-        Ok(())
     }
 }
