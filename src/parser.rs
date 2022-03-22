@@ -148,9 +148,9 @@ impl ReviewParser {
                 if let Some(stripped) = line.strip_prefix("@@ ") {
                     // Extra sanity check; the start of a hunk should look like:
                     //
-                    //      `@@ -731,7 +731,7 @@ [...]`
+                    //      `@@ -731,7 +731,7 @@[...]`
                     //
-                    if stripped.contains(" @@ ") {
+                    if stripped.contains(" @@") {
                         self.state = State::FileDiff(FileDiffState {
                             file: state.file.to_owned(),
                             position: 0,
@@ -357,6 +357,19 @@ mod tests {
                 comment: "Comment 2".to_string(),
             },
         ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn hunk_start_no_trailing_whitespace() {
+        let input = include_str!("../testdata/hunk_start_no_trailing_whitespace");
+        let expected = vec![ReviewComment {
+            file: "ch5.txt".to_string(),
+            position: 7,
+            start_position: None,
+            comment: "Great passage".to_string(),
+        }];
 
         test(input, &expected);
     }
