@@ -109,8 +109,11 @@ impl Review {
 
         let mut parser = ReviewParser::new();
         let mut comments = Vec::new();
-        for line in contents.lines() {
-            let res = parser.parse_line(line).context("Failed to parse review")?;
+        for (idx, line) in contents.lines().enumerate() {
+            let res = parser
+                .parse_line(line)
+                .with_context(|| format!("Failed to parse review on line {}", idx + 1))?;
+
             if let Some(c) = res {
                 comments.push(c);
             }
