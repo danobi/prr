@@ -7,9 +7,10 @@
               terminates it and another span starts)
 - [x] Wire up comment uploading to GH
 - [x] Inspect response error codes and body
-- [ ] Fix bug where `line` and `start_line` are being set instead of `position`
+- [x] Fix bug where `line` and `start_line` are being set instead of `position`
     - [x] Check if `start_position` is accepted
-    - [ ] Add test for trying to comment on a hunk start
+    - [x] Add test for trying to comment on a hunk start
+- [x] Figure out how to calculate line for diffs w/ changes on both sides
 - [ ] Support [...] snipping
 - [ ] Manual test that comments on a changed file work
 
