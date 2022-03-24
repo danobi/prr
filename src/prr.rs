@@ -84,11 +84,11 @@ impl Prr {
                 .map(|c| {
                     let mut json_comment = json!({
                         "path": c.file,
-                        "line": c.position,
+                        "line": c.line,
                         "body": c.comment,
                     });
-                    if let Some(start_position) = c.start_position {
-                        json_comment["start_line"] = start_position.into();
+                    if let Some(start_line) = c.start_line {
+                        json_comment["start_line"] = start_line.into();
                     }
 
                     json_comment

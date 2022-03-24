@@ -1,4 +1,15 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
+use lazy_static::lazy_static;
+use regex::Regex;
+
+// Use lazy static to ensure regex is only compiled once
+lazy_static! {
+    // Regex for the start of a hunk. The start of a hunk should look like:
+    //
+    //      `@@ -731,7 +731,7 @@[...]`
+    //
+    static ref HUNK_START: Regex = Regex::new(r"^@@ -\d+,\d+ \+(?P<start>\d+),\d+ @@").unwrap();
+}
 
 /// Represents a single comment on a review
 #[derive(Debug, PartialEq)]
@@ -7,15 +18,10 @@ pub struct ReviewComment {
     ///
     /// Note that this is the new filename if the file was also moved
     pub file: String,
-    /// The "line" a comment applies to. To quote github API:
-    ///
-    /// The position value equals the number of lines down from the first "@@" hunk header in the
-    /// file you want to add a comment. The line just below the "@@" line is position 1, the next
-    /// line is position 2, and so on. The position in the diff continues to increase through lines
-    /// of whitespace and additional hunks until the beginning of a new file.
-    pub position: u64,
-    /// For a spanned comment, the first line of the span. See `position` for docs on semantics
-    pub start_position: Option<u64>,
+    /// The line number on the "new" side of the diff a comment applies to
+    pub line: u64,
+    /// For a spanned comment, the first line of the span. See `line` for docs on semantics
+    pub start_line: Option<u64>,
     /// The user-supplied review comment
     pub comment: String,
 }
@@ -29,11 +35,11 @@ struct FilePreambleState {
 struct FileDiffState {
     /// Relative path of the file under diff
     file: String,
-    /// Current position. See `ReviewComment::position` for docs on semantics of `position`
-    position: u64,
-    /// Position of the start of the span. See `ReviewComment::position` for docs on
-    /// semantics of `position`
-    span_start_position: Option<u64>,
+    /// Current line. See `ReviewComment::line` for docs on semantics of `line`
+    line: u64,
+    /// First line of the span. See `ReviewComment::line` for docs on
+    /// semantics of `line`
+    span_start_line: Option<u64>,
 }
 
 struct SpanStartOrCommentState {
@@ -108,6 +114,26 @@ fn parse_diff_header(line: &str) -> Result<String> {
     Ok(parts[3][2..].trim().to_owned())
 }
 
+/// Parses the starting line out of the hunk start
+fn parse_hunk_start(line: &str) -> Result<Option<u64>> {
+    if let Some(captures) = HUNK_START.captures(line) {
+        let hunk_start_line: u64 = captures
+            .name("start")
+            .unwrap()
+            .as_str()
+            .parse()
+            .context("Failed to parse hunk start line")?;
+
+        if hunk_start_line == 0 {
+            bail!("Invalid hunk start line of 0");
+        }
+
+        return Ok(Some(hunk_start_line));
+    }
+
+    Ok(None)
+}
+
 impl ReviewParser {
     pub fn new() -> ReviewParser {
         ReviewParser {
@@ -145,18 +171,13 @@ impl ReviewParser {
                     );
                 }
 
-                if let Some(stripped) = line.strip_prefix("@@ ") {
-                    // Extra sanity check; the start of a hunk should look like:
-                    //
-                    //      `@@ -731,7 +731,7 @@[...]`
-                    //
-                    if stripped.contains(" @@") {
-                        self.state = State::FileDiff(FileDiffState {
-                            file: state.file.to_owned(),
-                            position: 0,
-                            span_start_position: None,
-                        });
-                    }
+                if let Some(start_line) = parse_hunk_start(line)? {
+                    self.state = State::FileDiff(FileDiffState {
+                        file: state.file.to_owned(),
+                        // Subtract 1 b/c this line is before the actual diff hunk
+                        line: start_line - 1,
+                        span_start_line: None,
+                    });
                 }
 
                 Ok(None)
@@ -164,7 +185,7 @@ impl ReviewParser {
             State::FileDiff(state) => {
                 if is_quoted {
                     if is_diff_header(line) {
-                        if state.span_start_position.is_some() {
+                        if state.span_start_line.is_some() {
                             bail!(
                                 "Detected span that was not terminated with a comment, file: {}",
                                 state.file
@@ -174,8 +195,11 @@ impl ReviewParser {
                         self.state = State::FilePreamble(FilePreambleState {
                             file: parse_diff_header(line)?,
                         });
+                    } else if let Some(start_line) = parse_hunk_start(line)? {
+                        // Subtract 1 b/c this line is before the actual diff hunk
+                        state.line = start_line - 1;
                     } else {
-                        state.position += 1;
+                        state.line += 1;
                     }
 
                     return Ok(None);
@@ -199,7 +223,7 @@ impl ReviewParser {
             }
             State::SpanStartOrComment(state) => {
                 if is_quoted {
-                    if state.file_diff_state.span_start_position.is_some() {
+                    if state.file_diff_state.span_start_line.is_some() {
                         bail!(
                             "Detected span that was not terminated with a comment, file: {}",
                             state.file_diff_state.file
@@ -207,11 +231,11 @@ impl ReviewParser {
                     }
 
                     // Back to the original file diff
-                    let next_pos = state.file_diff_state.position + 1;
+                    let next_pos = state.file_diff_state.line + 1;
                     self.state = State::FileDiff(FileDiffState {
                         file: state.file_diff_state.file.to_owned(),
-                        position: next_pos,
-                        span_start_position: Some(next_pos),
+                        line: next_pos,
+                        span_start_line: Some(next_pos),
                     });
 
                     Ok(None)
@@ -232,8 +256,8 @@ impl ReviewParser {
                 if is_quoted {
                     let comment = ReviewComment {
                         file: state.file_diff_state.file.clone(),
-                        position: state.file_diff_state.position,
-                        start_position: state.file_diff_state.span_start_position,
+                        line: state.file_diff_state.line,
+                        start_line: state.file_diff_state.span_start_line,
                         comment: state.comment.join("\n").trim_end().to_string(),
                     };
 
@@ -244,8 +268,8 @@ impl ReviewParser {
                     } else {
                         self.state = State::FileDiff(FileDiffState {
                             file: state.file_diff_state.file.to_owned(),
-                            position: state.file_diff_state.position + 1,
-                            span_start_position: None,
+                            line: state.file_diff_state.line + 1,
+                            span_start_line: None,
                         });
                     }
 
@@ -298,8 +322,8 @@ mod tests {
         let input = include_str!("../testdata/single_comment");
         let expected = vec![ReviewComment {
             file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-            position: 5,
-            start_position: Some(1),
+            line: 735,
+            start_line: Some(731),
             comment: "Comment 1".to_string(),
         }];
 
@@ -311,8 +335,8 @@ mod tests {
         let input = include_str!("../testdata/multiline_comment");
         let expected = vec![ReviewComment {
             file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-            position: 7,
-            start_position: None,
+            line: 737,
+            start_line: None,
             comment: "Comment line 1\nComment line 2\n\nComment line 4".to_string(),
         }];
 
@@ -325,14 +349,14 @@ mod tests {
         let expected = vec![
             ReviewComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-                position: 5,
-                start_position: Some(1),
+                line: 735,
+                start_line: Some(731),
                 comment: "Comment 1".to_string(),
             },
             ReviewComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-                position: 8,
-                start_position: None,
+                line: 738,
+                start_line: None,
                 comment: "Comment 2".to_string(),
             },
         ];
@@ -346,14 +370,14 @@ mod tests {
         let expected = vec![
             ReviewComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-                position: 5,
-                start_position: None,
+                line: 735,
+                start_line: None,
                 comment: "Comment 1".to_string(),
             },
             ReviewComment {
                 file: "libbpf-cargo/src/test.rs".to_string(),
-                position: 15,
-                start_position: None,
+                line: 2159,
+                start_line: None,
                 comment: "Comment 2".to_string(),
             },
         ];
@@ -366,8 +390,8 @@ mod tests {
         let input = include_str!("../testdata/hunk_start_no_trailing_whitespace");
         let expected = vec![ReviewComment {
             file: "ch5.txt".to_string(),
-            position: 7,
-            start_position: None,
+            line: 7,
+            start_line: None,
             comment: "Great passage".to_string(),
         }];
 
