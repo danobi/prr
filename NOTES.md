@@ -6,6 +6,9 @@
         - [x] Test invalid spans (span that does not have a comment that
               terminates it and another span starts)
 - [x] Wire up comment uploading to GH
+- [ ] Inspect response error codes and body
+- [ ] Fix bug where `line` and `start_line` are being set instead of `position`
+    - [ ] Check if `start_position` is accepted
 - [ ] Support [...] snipping
 - [ ] Manual test that comments on a changed file work
 
