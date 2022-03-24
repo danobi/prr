@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use octocrab::Octocrab;
+use reqwest::StatusCode;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
@@ -101,13 +102,27 @@ impl Prr {
             ._post(self.crab.absolute_url(path)?, Some(&body))
             .await
         {
-            Ok(_) => Ok(()),
+            Ok(resp) => {
+                let status = resp.status();
+                if status != StatusCode::OK {
+                    let text = resp
+                        .text()
+                        .await
+                        .context("Failed to decode failed response")?;
+                    bail!("Error during POST: Status code: {}, Body: {}", status, text);
+                }
+
+                Ok(())
+            }
             // GH is known to send unescaped control characters in JSON responses which
             // serde will fail to parse (not that it should succeed)
             Err(octocrab::Error::Json {
                 source: _,
                 backtrace: _,
-            }) => Ok(()),
+            }) => {
+                eprintln!("Warning: GH response had invalid JSON");
+                Ok(())
+            }
             Err(e) => bail!("Error during POST: {}", e),
         }
     }

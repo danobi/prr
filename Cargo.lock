@@ -805,6 +805,7 @@ dependencies = [
  "anyhow",
  "clap",
  "octocrab",
+ "reqwest",
  "serde",
  "serde_derive",
  "serde_json",
