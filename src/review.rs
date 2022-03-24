@@ -146,7 +146,7 @@ impl Review {
     }
 
     /// Returns path to user-facing review file
-    fn path(&self) -> PathBuf {
+    pub fn path(&self) -> PathBuf {
         let mut p = self.workdir.clone();
         p.push(&self.owner);
         p.push(&self.repo);

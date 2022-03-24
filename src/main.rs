@@ -65,7 +65,8 @@ async fn main() -> Result<()> {
     match args.command {
         Command::Get { pr } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
-            prr.get_pr(&owner, &repo, pr_num).await?;
+            let review = prr.get_pr(&owner, &repo, pr_num).await?;
+            println!("{}", review.path().display());
         }
         Command::Submit { pr } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
