@@ -77,6 +77,10 @@ impl Prr {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let comments = review.comments()?;
 
+        if comments.is_empty() {
+            bail!("No review comments");
+        }
+
         let body = json!({
             "body": "",
             "event": "COMMENT",
