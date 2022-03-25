@@ -134,7 +134,7 @@ fn parse_diff_header(line: &str) -> Result<String> {
 /// Parses the starting left & right lines out of the hunk start
 fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
     if let Some(captures) = HUNK_START.captures(line) {
-        let mut hunk_start_line_left: u64 = captures
+        let hunk_start_line_left: u64 = captures
             .name("lstart")
             .unwrap()
             .as_str()
@@ -148,15 +148,14 @@ fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
             .parse()
             .context("Failed to parse hunk start right line")?;
 
-        // Start of 0 in left side means new file. Because there can't be
-        // deletion there, just bullshit the number so caller can still subtract
-        // 1
-        if hunk_start_line_left == 0 {
-            hunk_start_line_left += 1;
-        }
-
-        if hunk_start_line_right == 0 {
-            bail!("Invalid hunk start line of 0");
+        // Hunks starting at line 0 implies the file was new (left side) or deleted
+        // (right side). Ensure that at least one of the start lines is non-zero.
+        //
+        // For the side that is zero, we allow the "UB" of underflowing when the
+        // caller subtracts 1 from the result. That is OK b/c we will never use that
+        // value, as you cannot comment on text that does not exist.
+        if hunk_start_line_left + hunk_start_line_right == 0 {
+            bail!("Both hunks lines start at 0");
         }
 
         return Ok(Some((hunk_start_line_left, hunk_start_line_right)));
@@ -219,8 +218,8 @@ impl ReviewParser {
 
                 if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)? {
                     // Subtract 1 b/c this line is before the actual diff hunk
-                    left_start -= 1;
-                    right_start -= 1;
+                    left_start = left_start.saturating_sub(1);
+                    right_start = right_start.saturating_sub(1);
 
                     self.state = State::FileDiff(FileDiffState {
                         file: state.file.to_owned(),
@@ -253,8 +252,8 @@ impl ReviewParser {
                     } else if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)?
                     {
                         // Subtract 1 b/c this line is before the actual diff hunk
-                        left_start -= 1;
-                        right_start -= 1;
+                        left_start = left_start.saturating_sub(1);
+                        right_start = right_start.saturating_sub(1);
 
                         state.left_line = left_start;
                         state.right_line = right_start;
@@ -491,6 +490,19 @@ mod tests {
             line: LineLocation::Right(7),
             start_line: None,
             comment: "Great passage".to_string(),
+        }];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn deleted_file() {
+        let input = include_str!("../testdata/deleted_file");
+        let expected = vec![ReviewComment {
+            file: "ch1.txt".to_string(),
+            line: LineLocation::Left(58),
+            start_line: Some(LineLocation::Left(1)),
+            comment: "Comment 1".to_string(),
         }];
 
         test(input, &expected);
