@@ -10,7 +10,8 @@
 - [x] Fix bug where `line` and `start_line` are being set instead of `position`
     - [x] Check if `start_position` is accepted
     - [x] Add test for trying to comment on a hunk start
-- [ ] Figure out how to calculate line for diffs w/ changes on both sides
+- [x] Figure out how to calculate line for diffs w/ changes on both sides
+- [ ] Add test for comment at end of review file
 - [ ] Support [...] snipping
 - [ ] Manual test that comments on a changed file work
 
