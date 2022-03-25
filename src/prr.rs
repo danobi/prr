@@ -73,7 +73,7 @@ impl Prr {
         Review::new(&self.workdir()?, diff, owner, repo, pr_num)
     }
 
-    pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
+    pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let comments = review.comments()?;
 
@@ -108,6 +108,10 @@ impl Prr {
                 })
                 .collect::<Vec<Value>>(),
         });
+
+        if debug {
+            println!("{}", serde_json::to_string_pretty(&body)?);
+        }
 
         let path = format!("/repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
         match self

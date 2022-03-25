@@ -20,6 +20,8 @@ enum Command {
     Submit {
         /// Pull request to review (eg. `danobi/prr/24`)
         pr: String,
+        #[clap(short, long)]
+        debug: bool,
     },
 }
 
@@ -68,9 +70,9 @@ async fn main() -> Result<()> {
             let review = prr.get_pr(&owner, &repo, pr_num).await?;
             println!("{}", review.path().display());
         }
-        Command::Submit { pr } => {
+        Command::Submit { pr, debug } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
-            prr.submit_pr(&owner, &repo, pr_num).await?;
+            prr.submit_pr(&owner, &repo, pr_num, debug).await?;
         }
     }
 
