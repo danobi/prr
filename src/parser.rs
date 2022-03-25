@@ -8,7 +8,21 @@ lazy_static! {
     //
     //      `@@ -731,7 +731,7 @@[...]`
     //
-    static ref HUNK_START: Regex = Regex::new(r"^@@ -\d+,\d+ \+(?P<start>\d+),\d+ @@").unwrap();
+    static ref HUNK_START: Regex = Regex::new(r"^@@ -(?P<lstart>\d+),\d+ \+(?P<rstart>\d+),\d+ @@").unwrap();
+}
+
+/// The location of a line
+///
+/// The distinction between Left and Right is important when commenting on
+/// deleted or added lines. A useful way to think about the line location is
+/// the line number a comment should be attached to in the file pre-change (left)
+/// or the file post-change (right)
+#[derive(Debug, PartialEq, Clone)]
+pub enum LineLocation {
+    /// The "red"/deleted side of the diff
+    Left(u64),
+    /// The "green"/added or "white"/existing side of the diff
+    Right(u64),
 }
 
 /// Represents a single comment on a review
@@ -18,10 +32,9 @@ pub struct ReviewComment {
     ///
     /// Note that this is the new filename if the file was also moved
     pub file: String,
-    /// The line number on the "new" side of the diff a comment applies to
-    pub line: u64,
+    pub line: LineLocation,
     /// For a spanned comment, the first line of the span. See `line` for docs on semantics
-    pub start_line: Option<u64>,
+    pub start_line: Option<LineLocation>,
     /// The user-supplied review comment
     pub comment: String,
 }
@@ -35,11 +48,15 @@ struct FilePreambleState {
 struct FileDiffState {
     /// Relative path of the file under diff
     file: String,
-    /// Current line. See `ReviewComment::line` for docs on semantics of `line`
-    line: u64,
-    /// First line of the span. See `ReviewComment::line` for docs on
+    /// Current left line position. See `LineLocation` for docs on semantics of `line`
+    left_line: u64,
+    /// Current right line position. See `LineLocation` for docs on semantics of `line`
+    right_line: u64,
+    /// Current line position
+    line: LineLocation,
+    /// First line of the span. See `LineLocation` for docs on
     /// semantics of `line`
-    span_start_line: Option<u64>,
+    span_start_line: Option<LineLocation>,
 }
 
 struct SpanStartOrCommentState {
@@ -114,24 +131,53 @@ fn parse_diff_header(line: &str) -> Result<String> {
     Ok(parts[3][2..].trim().to_owned())
 }
 
-/// Parses the starting line out of the hunk start
-fn parse_hunk_start(line: &str) -> Result<Option<u64>> {
+/// Parses the starting left & right lines out of the hunk start
+fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
     if let Some(captures) = HUNK_START.captures(line) {
-        let hunk_start_line: u64 = captures
-            .name("start")
+        let mut hunk_start_line_left: u64 = captures
+            .name("lstart")
             .unwrap()
             .as_str()
             .parse()
-            .context("Failed to parse hunk start line")?;
+            .context("Failed to parse hunk start left line")?;
 
-        if hunk_start_line == 0 {
+        let hunk_start_line_right: u64 = captures
+            .name("rstart")
+            .unwrap()
+            .as_str()
+            .parse()
+            .context("Failed to parse hunk start right line")?;
+
+        // Start of 0 in left side means new file. Because there can't be
+        // deletion there, just bullshit the number so caller can still subtract
+        // 1
+        if hunk_start_line_left == 0 {
+            hunk_start_line_left += 1;
+        }
+
+        if hunk_start_line_right == 0 {
             bail!("Invalid hunk start line of 0");
         }
 
-        return Ok(Some(hunk_start_line));
+        return Ok(Some((hunk_start_line_left, hunk_start_line_right)));
     }
 
     Ok(None)
+}
+
+fn is_left_line(line: &str) -> bool {
+    line.starts_with('-')
+}
+
+/// Given the current line and line positions, returns what the next line positions should be
+fn get_next_lines(line: &str, left: u64, right: u64) -> (u64, u64) {
+    if is_left_line(line) {
+        (left + 1, right)
+    } else if line.starts_with('+') {
+        (left, right + 1)
+    } else {
+        (left + 1, right + 1)
+    }
 }
 
 impl ReviewParser {
@@ -171,11 +217,20 @@ impl ReviewParser {
                     );
                 }
 
-                if let Some(start_line) = parse_hunk_start(line)? {
+                if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)? {
+                    // Subtract 1 b/c this line is before the actual diff hunk
+                    left_start -= 1;
+                    right_start -= 1;
+
                     self.state = State::FileDiff(FileDiffState {
                         file: state.file.to_owned(),
-                        // Subtract 1 b/c this line is before the actual diff hunk
-                        line: start_line - 1,
+                        left_line: left_start,
+                        right_line: right_start,
+                        line: if is_left_line(line) {
+                            LineLocation::Left(left_start)
+                        } else {
+                            LineLocation::Right(right_start)
+                        },
                         span_start_line: None,
                     });
                 }
@@ -195,11 +250,29 @@ impl ReviewParser {
                         self.state = State::FilePreamble(FilePreambleState {
                             file: parse_diff_header(line)?,
                         });
-                    } else if let Some(start_line) = parse_hunk_start(line)? {
+                    } else if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)?
+                    {
                         // Subtract 1 b/c this line is before the actual diff hunk
-                        state.line = start_line - 1;
+                        left_start -= 1;
+                        right_start -= 1;
+
+                        state.left_line = left_start;
+                        state.right_line = right_start;
+                        if is_left_line(line) {
+                            state.line = LineLocation::Left(left_start);
+                        } else {
+                            state.line = LineLocation::Right(right_start);
+                        }
                     } else {
-                        state.line += 1;
+                        let (next_left, next_right) =
+                            get_next_lines(line, state.left_line, state.right_line);
+                        state.left_line = next_left;
+                        state.right_line = next_right;
+                        if is_left_line(line) {
+                            state.line = LineLocation::Left(next_left);
+                        } else {
+                            state.line = LineLocation::Right(next_right);
+                        }
                     }
 
                     return Ok(None);
@@ -231,11 +304,25 @@ impl ReviewParser {
                     }
 
                     // Back to the original file diff
-                    let next_pos = state.file_diff_state.line + 1;
+                    let (next_left, next_right) = get_next_lines(
+                        line,
+                        state.file_diff_state.left_line,
+                        state.file_diff_state.right_line,
+                    );
                     self.state = State::FileDiff(FileDiffState {
                         file: state.file_diff_state.file.to_owned(),
-                        line: next_pos,
-                        span_start_line: Some(next_pos),
+                        left_line: next_left,
+                        right_line: next_right,
+                        line: if is_left_line(line) {
+                            LineLocation::Left(next_left)
+                        } else {
+                            LineLocation::Right(next_right)
+                        },
+                        span_start_line: Some(if is_left_line(line) {
+                            LineLocation::Left(next_left)
+                        } else {
+                            LineLocation::Right(next_right)
+                        }),
                     });
 
                     Ok(None)
@@ -256,8 +343,8 @@ impl ReviewParser {
                 if is_quoted {
                     let comment = ReviewComment {
                         file: state.file_diff_state.file.clone(),
-                        line: state.file_diff_state.line,
-                        start_line: state.file_diff_state.span_start_line,
+                        line: state.file_diff_state.line.clone(),
+                        start_line: state.file_diff_state.span_start_line.clone(),
                         comment: state.comment.join("\n").trim_end().to_string(),
                     };
 
@@ -266,9 +353,20 @@ impl ReviewParser {
                             file: parse_diff_header(line)?,
                         });
                     } else {
+                        let (next_left, next_right) = get_next_lines(
+                            line,
+                            state.file_diff_state.left_line,
+                            state.file_diff_state.right_line,
+                        );
                         self.state = State::FileDiff(FileDiffState {
                             file: state.file_diff_state.file.to_owned(),
-                            line: state.file_diff_state.line + 1,
+                            left_line: next_left,
+                            right_line: next_right,
+                            line: if is_left_line(line) {
+                                LineLocation::Left(next_left)
+                            } else {
+                                LineLocation::Right(next_right)
+                            },
                             span_start_line: None,
                         });
                     }
@@ -322,8 +420,8 @@ mod tests {
         let input = include_str!("../testdata/single_comment");
         let expected = vec![ReviewComment {
             file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-            line: 735,
-            start_line: Some(731),
+            line: LineLocation::Right(734),
+            start_line: Some(LineLocation::Right(731)),
             comment: "Comment 1".to_string(),
         }];
 
@@ -335,7 +433,7 @@ mod tests {
         let input = include_str!("../testdata/multiline_comment");
         let expected = vec![ReviewComment {
             file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-            line: 737,
+            line: LineLocation::Right(736),
             start_line: None,
             comment: "Comment line 1\nComment line 2\n\nComment line 4".to_string(),
         }];
@@ -349,13 +447,13 @@ mod tests {
         let expected = vec![
             ReviewComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-                line: 735,
-                start_line: Some(731),
+                line: LineLocation::Right(734),
+                start_line: Some(LineLocation::Right(731)),
                 comment: "Comment 1".to_string(),
             },
             ReviewComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-                line: 738,
+                line: LineLocation::Right(737),
                 start_line: None,
                 comment: "Comment 2".to_string(),
             },
@@ -370,13 +468,13 @@ mod tests {
         let expected = vec![
             ReviewComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
-                line: 735,
+                line: LineLocation::Right(734),
                 start_line: None,
                 comment: "Comment 1".to_string(),
             },
             ReviewComment {
                 file: "libbpf-cargo/src/test.rs".to_string(),
-                line: 2159,
+                line: LineLocation::Right(2159),
                 start_line: None,
                 comment: "Comment 2".to_string(),
             },
@@ -390,7 +488,7 @@ mod tests {
         let input = include_str!("../testdata/hunk_start_no_trailing_whitespace");
         let expected = vec![ReviewComment {
             file: "ch5.txt".to_string(),
-            line: 7,
+            line: LineLocation::Right(7),
             start_line: None,
             comment: "Great passage".to_string(),
         }];

@@ -7,6 +7,7 @@ use reqwest::StatusCode;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
+use crate::parser::LineLocation;
 use crate::review::Review;
 
 #[derive(Debug, Deserialize)]
@@ -82,13 +83,25 @@ impl Prr {
             "comments": comments
                 .iter()
                 .map(|c| {
+                    let (line, side) = match c.line {
+                        LineLocation::Left(line) => (line, "LEFT"),
+                        LineLocation::Right(line) => (line, "RIGHT"),
+                    };
+
                     let mut json_comment = json!({
                         "path": c.file,
-                        "line": c.line,
+                        "line": line,
                         "body": c.comment,
+                        "side": side,
                     });
-                    if let Some(start_line) = c.start_line {
-                        json_comment["start_line"] = start_line.into();
+                    if let Some(start_line) = &c.start_line {
+                        let (line, side) = match start_line {
+                            LineLocation::Left(line) => (line, "LEFT"),
+                            LineLocation::Right(line) => (line, "RIGHT"),
+                        };
+
+                        json_comment["start_line"] = (*line).into();
+                        json_comment["start_side"] = side.into();
                     }
 
                     json_comment
