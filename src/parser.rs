@@ -378,6 +378,18 @@ impl ReviewParser {
             }
         }
     }
+
+    pub fn finish(self) -> Option<ReviewComment> {
+        match self.state {
+            State::Comment(state) => Some(ReviewComment {
+                file: state.file_diff_state.file,
+                line: state.file_diff_state.line,
+                start_line: state.file_diff_state.span_start_line,
+                comment: state.comment.join("\n").trim_end().to_string(),
+            }),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -404,6 +416,10 @@ mod tests {
             if let Some(c) = parser.parse_line(line).unwrap() {
                 comments.push(c);
             }
+        }
+
+        if let Some(c) = parser.finish() {
+            comments.push(c);
         }
 
         assert!(
@@ -501,6 +517,19 @@ mod tests {
         let expected = vec![ReviewComment {
             file: "ch1.txt".to_string(),
             line: LineLocation::Left(58),
+            start_line: Some(LineLocation::Left(1)),
+            comment: "Comment 1".to_string(),
+        }];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn trailing_comment() {
+        let input = include_str!("../testdata/trailing_comment");
+        let expected = vec![ReviewComment {
+            file: "ch1.txt".to_string(),
+            line: LineLocation::Left(59),
             start_line: Some(LineLocation::Left(1)),
             comment: "Comment 1".to_string(),
         }];

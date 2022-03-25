@@ -119,6 +119,10 @@ impl Review {
             }
         }
 
+        if let Some(c) = parser.finish() {
+            comments.push(c);
+        }
+
         Ok(comments)
     }
 
