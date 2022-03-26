@@ -12,7 +12,7 @@
     - [x] Add test for trying to comment on a hunk start
 - [x] Figure out how to calculate line for diffs w/ changes on both sides
 - [x] Add test for comment at end of review file
-- [ ] Prohibit cross hunk spanned comments
+- [x] Prohibit cross hunk spanned comments
 - [ ] Support review-level comments at top of review file
 - [ ] Support [...] snipping
 - [ ] Manual test that comments on a changed file work

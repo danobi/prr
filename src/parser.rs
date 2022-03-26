@@ -251,6 +251,10 @@ impl ReviewParser {
                         });
                     } else if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)?
                     {
+                        if state.span_start_line.is_some() {
+                            bail!("Detected cross chunk span, file: {}", state.file);
+                        }
+
                         // Subtract 1 b/c this line is before the actual diff hunk
                         left_start = left_start.saturating_sub(1);
                         right_start = right_start.saturating_sub(1);
@@ -552,6 +556,12 @@ mod tests {
     #[test]
     fn unterminated_back_to_back_span() {
         let input = include_str!("../testdata/unterminated_back_to_back_span");
+        test_fail(input);
+    }
+
+    #[test]
+    fn cross_hunk_span() {
+        let input = include_str!("../testdata/cross_hunk_span");
         test_fail(input);
     }
 }
