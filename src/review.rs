@@ -154,7 +154,7 @@ impl Review {
         let mut p = self.workdir.clone();
         p.push(&self.owner);
         p.push(&self.repo);
-        p.push(self.pr_num.to_string());
+        p.push(format!("{}.prr", self.pr_num));
 
         p
     }
