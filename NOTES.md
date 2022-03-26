@@ -15,7 +15,7 @@
 - [x] Prohibit cross hunk spanned comments
 - [ ] Support review-level comments at top of review file
 - [ ] Support [...] snipping
-- [ ] Manual test that comments on a changed file work
+- [x] Manual test that comments on a changed file work
 
 # Thoughts
 
