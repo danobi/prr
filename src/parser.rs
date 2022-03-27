@@ -25,9 +25,9 @@ pub enum LineLocation {
     Right(u64),
 }
 
-/// Represents a single comment on a review
+/// Represents a single inline comment on a review
 #[derive(Debug, PartialEq)]
-pub struct ReviewComment {
+pub struct InlineComment {
     /// File the comment is in
     ///
     /// Note that this is the new filename if the file was also moved
@@ -37,6 +37,15 @@ pub struct ReviewComment {
     pub start_line: Option<LineLocation>,
     /// The user-supplied review comment
     pub comment: String,
+}
+
+/// Represents a comment of some sort on a review
+#[derive(Debug, PartialEq)]
+pub enum Comment {
+    /// Overall review comment (the summary comment)
+    Review(String),
+    /// An inline comment (attached to a line)
+    Inline(InlineComment),
 }
 
 struct FilePreambleState {
@@ -186,7 +195,7 @@ impl ReviewParser {
         }
     }
 
-    pub fn parse_line(&mut self, mut line: &str) -> Result<Option<ReviewComment>> {
+    pub fn parse_line(&mut self, mut line: &str) -> Result<Option<Comment>> {
         let is_quoted = line.starts_with("> ");
         if is_quoted {
             line = &line[2..];
@@ -344,12 +353,12 @@ impl ReviewParser {
             }
             State::Comment(state) => {
                 if is_quoted {
-                    let comment = ReviewComment {
+                    let comment = Comment::Inline(InlineComment {
                         file: state.file_diff_state.file.clone(),
                         line: state.file_diff_state.line.clone(),
                         start_line: state.file_diff_state.span_start_line.clone(),
                         comment: state.comment.join("\n").trim_end().to_string(),
-                    };
+                    });
 
                     if is_diff_header(line) {
                         self.state = State::FilePreamble(FilePreambleState {
@@ -383,14 +392,14 @@ impl ReviewParser {
         }
     }
 
-    pub fn finish(self) -> Option<ReviewComment> {
+    pub fn finish(self) -> Option<Comment> {
         match self.state {
-            State::Comment(state) => Some(ReviewComment {
+            State::Comment(state) => Some(Comment::Inline(InlineComment {
                 file: state.file_diff_state.file,
                 line: state.file_diff_state.line,
                 start_line: state.file_diff_state.span_start_line,
                 comment: state.comment.join("\n").trim_end().to_string(),
-            }),
+            })),
             _ => None,
         }
     }
@@ -412,7 +421,7 @@ mod tests {
         panic!("Parser succeeded when it should have failed");
     }
 
-    fn test(input: &str, expected: &[ReviewComment]) {
+    fn test(input: &str, expected: &[Comment]) {
         let mut parser = ReviewParser::new();
         let mut comments = Vec::new();
 
@@ -437,12 +446,12 @@ mod tests {
     #[test]
     fn single_comment() {
         let input = include_str!("../testdata/single_comment");
-        let expected = vec![ReviewComment {
+        let expected = vec![Comment::Inline(InlineComment {
             file: "libbpf-cargo/src/btf/btf.rs".to_string(),
             line: LineLocation::Right(734),
             start_line: Some(LineLocation::Right(731)),
             comment: "Comment 1".to_string(),
-        }];
+        })];
 
         test(input, &expected);
     }
@@ -450,12 +459,12 @@ mod tests {
     #[test]
     fn multiline_comment() {
         let input = include_str!("../testdata/multiline_comment");
-        let expected = vec![ReviewComment {
+        let expected = vec![Comment::Inline(InlineComment {
             file: "libbpf-cargo/src/btf/btf.rs".to_string(),
             line: LineLocation::Right(736),
             start_line: None,
             comment: "Comment line 1\nComment line 2\n\nComment line 4".to_string(),
-        }];
+        })];
 
         test(input, &expected);
     }
@@ -464,18 +473,18 @@ mod tests {
     fn back_to_back_span() {
         let input = include_str!("../testdata/back_to_back_span");
         let expected = vec![
-            ReviewComment {
+            Comment::Inline(InlineComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
                 line: LineLocation::Right(734),
                 start_line: Some(LineLocation::Right(731)),
                 comment: "Comment 1".to_string(),
-            },
-            ReviewComment {
+            }),
+            Comment::Inline(InlineComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
                 line: LineLocation::Right(737),
                 start_line: None,
                 comment: "Comment 2".to_string(),
-            },
+            }),
         ];
 
         test(input, &expected);
@@ -485,18 +494,18 @@ mod tests {
     fn multiple_files() {
         let input = include_str!("../testdata/multiple_files");
         let expected = vec![
-            ReviewComment {
+            Comment::Inline(InlineComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
                 line: LineLocation::Right(734),
                 start_line: None,
                 comment: "Comment 1".to_string(),
-            },
-            ReviewComment {
+            }),
+            Comment::Inline(InlineComment {
                 file: "libbpf-cargo/src/test.rs".to_string(),
                 line: LineLocation::Right(2159),
                 start_line: None,
                 comment: "Comment 2".to_string(),
-            },
+            }),
         ];
 
         test(input, &expected);
@@ -505,12 +514,12 @@ mod tests {
     #[test]
     fn hunk_start_no_trailing_whitespace() {
         let input = include_str!("../testdata/hunk_start_no_trailing_whitespace");
-        let expected = vec![ReviewComment {
+        let expected = vec![Comment::Inline(InlineComment {
             file: "ch5.txt".to_string(),
             line: LineLocation::Right(7),
             start_line: None,
             comment: "Great passage".to_string(),
-        }];
+        })];
 
         test(input, &expected);
     }
@@ -518,12 +527,12 @@ mod tests {
     #[test]
     fn deleted_file() {
         let input = include_str!("../testdata/deleted_file");
-        let expected = vec![ReviewComment {
+        let expected = vec![Comment::Inline(InlineComment {
             file: "ch1.txt".to_string(),
             line: LineLocation::Left(58),
             start_line: Some(LineLocation::Left(1)),
             comment: "Comment 1".to_string(),
-        }];
+        })];
 
         test(input, &expected);
     }
@@ -531,12 +540,12 @@ mod tests {
     #[test]
     fn trailing_comment() {
         let input = include_str!("../testdata/trailing_comment");
-        let expected = vec![ReviewComment {
+        let expected = vec![Comment::Inline(InlineComment {
             file: "ch1.txt".to_string(),
             line: LineLocation::Left(59),
             start_line: Some(LineLocation::Left(1)),
             comment: "Comment 1".to_string(),
-        }];
+        })];
 
         test(input, &expected);
     }

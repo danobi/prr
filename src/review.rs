@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::parser::{ReviewComment, ReviewParser};
+use crate::parser::{Comment, InlineComment, ReviewParser};
 
 /// Represents the state of a single review
 pub struct Review {
@@ -103,7 +103,7 @@ impl Review {
     }
 
     /// Parse the user-supplied comments on a review
-    pub fn comments(&self) -> Result<Vec<ReviewComment>> {
+    pub fn comments(&self) -> Result<Vec<InlineComment>> {
         let contents = fs::read_to_string(self.path()).context("Failed to read review file")?;
         self.validate_review_file(&contents)?;
 
@@ -114,14 +114,17 @@ impl Review {
                 .parse_line(line)
                 .with_context(|| format!("Failed to parse review on line {}", idx + 1))?;
 
-            if let Some(c) = res {
+            if let Some(Comment::Inline(c)) = res {
                 comments.push(c);
             }
         }
 
-        if let Some(c) = parser.finish() {
-            comments.push(c);
-        }
+        match parser.finish() {
+            Some(Comment::Inline(c)) => comments.push(c),
+            // Original diff must have been short to begin with
+            Some(Comment::Review(_)) => bail!("Unexpected review comment at parser finish"),
+            None => {}
+        };
 
         Ok(comments)
     }
