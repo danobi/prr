@@ -103,30 +103,41 @@ impl Review {
     }
 
     /// Parse the user-supplied comments on a review
-    pub fn comments(&self) -> Result<Vec<InlineComment>> {
+    ///
+    /// Returns (overall review comment, inline comments)
+    pub fn comments(&self) -> Result<(String, Vec<InlineComment>)> {
         let contents = fs::read_to_string(self.path()).context("Failed to read review file")?;
         self.validate_review_file(&contents)?;
 
         let mut parser = ReviewParser::new();
-        let mut comments = Vec::new();
+        let mut review_comment = String::new();
+        let mut inline_comments = Vec::new();
         for (idx, line) in contents.lines().enumerate() {
             let res = parser
                 .parse_line(line)
                 .with_context(|| format!("Failed to parse review on line {}", idx + 1))?;
 
-            if let Some(Comment::Inline(c)) = res {
-                comments.push(c);
+            match res {
+                Some(Comment::Review(c)) => {
+                    if !review_comment.is_empty() {
+                        bail!("Somehow saw more than one review comment");
+                    }
+
+                    review_comment = c;
+                }
+                Some(Comment::Inline(c)) => inline_comments.push(c),
+                None => {}
             }
         }
 
         match parser.finish() {
-            Some(Comment::Inline(c)) => comments.push(c),
+            Some(Comment::Inline(c)) => inline_comments.push(c),
             // Original diff must have been short to begin with
             Some(Comment::Review(_)) => bail!("Unexpected review comment at parser finish"),
             None => {}
         };
 
-        Ok(comments)
+        Ok((review_comment, inline_comments))
     }
 
     /// Validates whether the user corrupted the quoted contents

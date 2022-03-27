@@ -13,7 +13,7 @@
 - [x] Figure out how to calculate line for diffs w/ changes on both sides
 - [x] Add test for comment at end of review file
 - [x] Prohibit cross hunk spanned comments
-- [ ] Support review-level comments at top of review file
+- [x] Support review-level comments at top of review file
 - [ ] Support [...] snipping
 - [x] Manual test that comments on a changed file work
 

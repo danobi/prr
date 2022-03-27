@@ -48,6 +48,12 @@ pub enum Comment {
     Inline(InlineComment),
 }
 
+#[derive(Default)]
+struct StartState {
+    /// Each line of review-level comment is stored as an entry
+    comment: Vec<String>,
+}
+
 struct FilePreambleState {
     /// Relative path of the file under diff
     file: String,
@@ -96,7 +102,7 @@ struct CommentState {
 ///
 enum State {
     /// Starting state
-    Start,
+    Start(StartState),
     /// The `diff --git a/...` preamble as well as the lines before the first hunk
     FilePreamble(FilePreambleState),
     /// We are inside the diff of a file
@@ -191,7 +197,7 @@ fn get_next_lines(line: &str, left: u64, right: u64) -> (u64, u64) {
 impl ReviewParser {
     pub fn new() -> ReviewParser {
         ReviewParser {
-            state: State::Start,
+            state: State::Start(StartState::default()),
         }
     }
 
@@ -202,18 +208,26 @@ impl ReviewParser {
         }
 
         match &mut self.state {
-            State::Start => {
-                if !is_quoted {
-                    bail!("Unexpected comment in start state");
+            State::Start(state) => {
+                if is_quoted {
+                    if !is_diff_header(line) {
+                        bail!("Expected diff header from start state, found '{}'", line);
+                    }
+
+                    let mut review_comment = None;
+                    if !state.comment.is_empty() {
+                        review_comment =
+                            Some(Comment::Review(state.comment.join("\n").trim().to_string()));
+                    }
+
+                    self.state = State::FilePreamble(FilePreambleState {
+                        file: parse_diff_header(line)?,
+                    });
+
+                    return Ok(review_comment);
                 }
 
-                if !is_diff_header(line) {
-                    bail!("Expected diff header from start state, found '{}'", line);
-                }
-
-                self.state = State::FilePreamble(FilePreambleState {
-                    file: parse_diff_header(line)?,
-                });
+                state.comment.push(line.to_owned());
 
                 Ok(None)
             }
@@ -452,6 +466,22 @@ mod tests {
             start_line: Some(LineLocation::Right(731)),
             comment: "Comment 1".to_string(),
         })];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn review_comment() {
+        let input = include_str!("../testdata/review_comment");
+        let expected = vec![
+            Comment::Review("Review comment".to_string()),
+            Comment::Inline(InlineComment {
+                file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+                line: LineLocation::Right(734),
+                start_line: Some(LineLocation::Right(731)),
+                comment: "Comment 1".to_string(),
+            }),
+        ];
 
         test(input, &expected);
     }

@@ -75,16 +75,16 @@ impl Prr {
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let comments = review.comments()?;
+        let (review_comment, inline_comments) = review.comments()?;
 
-        if comments.is_empty() {
+        if review_comment.is_empty() && inline_comments.is_empty() {
             bail!("No review comments");
         }
 
         let body = json!({
-            "body": "",
+            "body": review_comment,
             "event": "COMMENT",
-            "comments": comments
+            "comments": inline_comments
                 .iter()
                 .map(|c| {
                     let (line, side) = match c.line {
