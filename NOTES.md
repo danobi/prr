@@ -14,8 +14,11 @@
 - [x] Add test for comment at end of review file
 - [x] Prohibit cross hunk spanned comments
 - [x] Support review-level comments at top of review file
-- [ ] Support [...] snipping
 - [x] Manual test that comments on a changed file work
+- [ ] Support approve/rejecting PRs
+    - [ ] Need some kind of meta syntax (like go's //+)
+        - [ ] Think about if it could be generalized to comment threads
+- [ ] Support [...] snipping
 
 # Thoughts
 
