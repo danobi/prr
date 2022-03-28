@@ -64,6 +64,35 @@ browser to cross reference code from the changes was driving me nuts.
     For details on how to actually mark up the review file, see the next
     section titled "Features"
 
+### Features
+
+#### Review comment
+
+Description: PR-level review comment. You only get one of these per review.
+
+Syntax: Non-whitespace, non-quoted text at the beginning of the review file.
+
+[Example](examples/review_comment.prr)
+
+#### Inline comment
+
+Description: Inline comment attached to a specific line of the diff.
+
+Syntax: None-whitespace, non-quoted text on a newline immediately following
+a quoted non-header part of the diff.
+
+[Example](examples/inline_comment.prr)
+
+#### Spanned inline comment
+
+Description: Like an inline comment, except it covers a span of lines.
+
+Syntax: To start a span, insert one or more newlines immediately before
+a quoted, non-header part of the diff. To terminate a span, insert a
+inline comment.
+
+[Example](examples/spanned_inline_comment.prr)
+
 ### Vim integration
 
 "Vim integration" is a bit overselling it, but I've created some `ftdetect`
