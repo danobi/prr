@@ -7,7 +7,7 @@ use reqwest::StatusCode;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
-use crate::parser::LineLocation;
+use crate::parser::{LineLocation, ReviewAction};
 use crate::review::Review;
 
 #[derive(Debug, Deserialize)]
@@ -75,7 +75,7 @@ impl Prr {
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let (review_comment, inline_comments) = review.comments()?;
+        let (review_action, review_comment, inline_comments) = review.comments()?;
 
         if review_comment.is_empty() && inline_comments.is_empty() {
             bail!("No review comments");
@@ -83,7 +83,11 @@ impl Prr {
 
         let body = json!({
             "body": review_comment,
-            "event": "COMMENT",
+            "event": match review_action {
+                ReviewAction::Approve => "APPROVE",
+                ReviewAction::RequestChanges => "REQUEST_CHANGES",
+                ReviewAction::Comment => "COMMENT"
+            },
             "comments": inline_comments
                 .iter()
                 .map(|c| {

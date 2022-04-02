@@ -39,6 +39,13 @@ pub struct InlineComment {
     pub comment: String,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ReviewAction {
+    Approve,
+    RequestChanges,
+    Comment,
+}
+
 /// Represents a comment of some sort on a review
 #[derive(Debug, PartialEq)]
 pub enum Comment {
@@ -46,6 +53,8 @@ pub enum Comment {
     Review(String),
     /// An inline comment (attached to a line)
     Inline(InlineComment),
+    /// Overall approve, reject, or comment on review
+    ReviewAction(ReviewAction),
 }
 
 #[derive(Default)]
@@ -123,6 +132,18 @@ pub struct ReviewParser {
 
 fn is_diff_header(s: &str) -> bool {
     s.starts_with("diff --git ")
+}
+
+/// Parses lines in the form of `@prr DIRECTIVE`
+///
+/// Returns Some(directive) if found, else None
+fn is_prr_directive(s: &str) -> Option<&str> {
+    let t = s.trim();
+    if let Some(d) = t.strip_prefix("@prr ") {
+        Some(d)
+    } else {
+        None
+    }
 }
 
 /// Parses the new filename out of a diff header
@@ -225,6 +246,13 @@ impl ReviewParser {
                     });
 
                     return Ok(review_comment);
+                } else if let Some(d) = is_prr_directive(line) {
+                    return match d {
+                        "approve" => Ok(Some(Comment::ReviewAction(ReviewAction::Approve))),
+                        "reject" => Ok(Some(Comment::ReviewAction(ReviewAction::RequestChanges))),
+                        "comment" => Ok(Some(Comment::ReviewAction(ReviewAction::Comment))),
+                        _ => bail!("Unknown @prr directive: {}", d),
+                    };
                 }
 
                 state.comment.push(line.to_owned());
@@ -471,6 +499,38 @@ mod tests {
     }
 
     #[test]
+    fn approve_review() {
+        let input = include_str!("../testdata/approve_review");
+        let expected = vec![
+            Comment::ReviewAction(ReviewAction::Approve),
+            Comment::Inline(InlineComment {
+                file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+                line: LineLocation::Right(734),
+                start_line: Some(LineLocation::Right(731)),
+                comment: "Comment 1".to_string(),
+            }),
+        ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn reject_review() {
+        let input = include_str!("../testdata/reject_review");
+        let expected = vec![
+            Comment::ReviewAction(ReviewAction::RequestChanges),
+            Comment::Inline(InlineComment {
+                file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+                line: LineLocation::Right(734),
+                start_line: Some(LineLocation::Right(731)),
+                comment: "Comment 1".to_string(),
+            }),
+        ];
+
+        test(input, &expected);
+    }
+
+    #[test]
     fn review_comment() {
         let input = include_str!("../testdata/review_comment");
         let expected = vec![
@@ -601,6 +661,12 @@ mod tests {
     #[test]
     fn cross_hunk_span() {
         let input = include_str!("../testdata/cross_hunk_span");
+        test_fail(input);
+    }
+
+    #[test]
+    fn unknown_directive() {
+        let input = include_str!("../testdata/unknown_directive");
         test_fail(input);
     }
 }

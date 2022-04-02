@@ -15,8 +15,8 @@
 - [x] Prohibit cross hunk spanned comments
 - [x] Support review-level comments at top of review file
 - [x] Manual test that comments on a changed file work
-- [ ] Support approve/rejecting PRs
-    - [ ] Need some kind of meta syntax (like go's //+)
+- [x] Support approve/rejecting PRs
+    - [x] Need some kind of meta syntax (like go's //+)
         - [ ] Think about if it could be generalized to comment threads
 - [ ] Support updating a PR's review file, but ask for confirmation if review file has been modified and not submitted yet
     - [ ] Maybe even check mtime between review file and submission time?

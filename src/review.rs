@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::parser::{Comment, InlineComment, ReviewParser};
+use crate::parser::{Comment, InlineComment, ReviewAction, ReviewParser};
 
 /// Represents the state of a single review
 pub struct Review {
@@ -104,12 +104,13 @@ impl Review {
 
     /// Parse the user-supplied comments on a review
     ///
-    /// Returns (overall review comment, inline comments)
-    pub fn comments(&self) -> Result<(String, Vec<InlineComment>)> {
+    /// Returns (overall review action, overall review comment, inline comments)
+    pub fn comments(&self) -> Result<(ReviewAction, String, Vec<InlineComment>)> {
         let contents = fs::read_to_string(self.path()).context("Failed to read review file")?;
         self.validate_review_file(&contents)?;
 
         let mut parser = ReviewParser::new();
+        let mut review_action = ReviewAction::Comment;
         let mut review_comment = String::new();
         let mut inline_comments = Vec::new();
         for (idx, line) in contents.lines().enumerate() {
@@ -126,6 +127,7 @@ impl Review {
                     review_comment = c;
                 }
                 Some(Comment::Inline(c)) => inline_comments.push(c),
+                Some(Comment::ReviewAction(a)) => review_action = a,
                 None => {}
             }
         }
@@ -134,10 +136,11 @@ impl Review {
             Some(Comment::Inline(c)) => inline_comments.push(c),
             // Original diff must have been short to begin with
             Some(Comment::Review(_)) => bail!("Unexpected review comment at parser finish"),
+            Some(Comment::ReviewAction(_)) => bail!("Unexpected review action at parser finish"),
             None => {}
         };
 
-        Ok((review_comment, inline_comments))
+        Ok((review_action, review_comment, inline_comments))
     }
 
     /// Validates whether the user corrupted the quoted contents
