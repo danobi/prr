@@ -93,6 +93,15 @@ inline comment.
 
 [Example](examples/spanned_inline_comment.prr)
 
+#### Review directives
+
+Description: Meta-directives to give to `prr` in review comment. Currently
+only supports approving, requesting changes to, and commenting on a PR.
+
+Syntax: `@prr approve`, `@prr reject`, or `@prr comment`.
+
+[Example](examples/prr_directive.prr)
+
 ### Vim integration
 
 "Vim integration" is a bit overselling it, but I've created some `ftdetect`
