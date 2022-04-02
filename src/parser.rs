@@ -253,9 +253,10 @@ impl ReviewParser {
                         "comment" => Ok(Some(Comment::ReviewAction(ReviewAction::Comment))),
                         _ => bail!("Unknown @prr directive: {}", d),
                     };
+                } else if !state.comment.is_empty() || !line.trim().is_empty() {
+                    // Only blindly add lines if lines have already been added
+                    state.comment.push(line.to_owned());
                 }
-
-                state.comment.push(line.to_owned());
 
                 Ok(None)
             }
@@ -541,6 +542,17 @@ mod tests {
                 start_line: Some(LineLocation::Right(731)),
                 comment: "Comment 1".to_string(),
             }),
+        ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn review_comment_whitespace() {
+        let input = include_str!("../testdata/review_comment_whitespace");
+        let expected = vec![
+            Comment::ReviewAction(ReviewAction::Approve),
+            Comment::Review("Review comment".to_string()),
         ];
 
         test(input, &expected);
