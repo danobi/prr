@@ -20,6 +20,7 @@
         - [ ] Think about if it could be generalized to comment threads
 - [ ] Support updating a PR's review file, but ask for confirmation if review file has been modified and not submitted yet
     - [ ] Maybe even check mtime between review file and submission time?
+- [ ] Save commit hash of downloaded review file
 - [ ] Support [...] snipping
 
 # Thoughts
