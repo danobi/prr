@@ -2,6 +2,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
@@ -25,6 +26,8 @@ pub struct Review {
 struct ReviewMetadata {
     /// Original .diff file contents. Used to detect corrupted review files
     original: String,
+    /// Time (seconds since epoch) the review file was last submitted
+    submitted: Option<u64>,
 }
 
 fn prefix_lines(s: &str, prefix: &str) -> String {
@@ -72,10 +75,12 @@ impl Review {
             .context("Failed to write review file")?;
 
         // Create metadata file
-        let metadata = ReviewMetadata { original: diff };
+        let metadata = ReviewMetadata {
+            original: diff,
+            submitted: None,
+        };
         let json = serde_json::to_string(&metadata)?;
-        let mut metadata_path = review_path.clone();
-        metadata_path.set_file_name(format!(".{}", pr_num));
+        let metadata_path = review.metadata_path();
         let mut metadata_file = OpenOptions::new()
             .write(true)
             .create(true)
@@ -143,6 +148,32 @@ impl Review {
         Ok((review_action, review_comment, inline_comments))
     }
 
+    /// Update the review file's submission time
+    pub fn mark_submitted(&mut self) -> Result<()> {
+        let metadata_path = self.metadata_path();
+        let data = fs::read_to_string(&metadata_path).context("Failed to read metadata file")?;
+        let mut metadata: ReviewMetadata =
+            serde_json::from_str(&data).context("Failed to parse metadata json")?;
+
+        let submission_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards");
+        metadata.submitted = Some(submission_time.as_secs());
+
+        let json = serde_json::to_string(&metadata)?;
+        let mut metadata_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&metadata_path)
+            .context("Failed to create metadata file")?;
+        metadata_file
+            .write_all(json.as_bytes())
+            .context("Failed to write metadata file")?;
+
+        Ok(())
+    }
+
     /// Validates whether the user corrupted the quoted contents
     fn validate_review_file(&self, contents: &str) -> Result<()> {
         let mut reconstructed = String::with_capacity(contents.len());
@@ -153,8 +184,7 @@ impl Review {
             }
         }
 
-        let mut metadata_path = self.path();
-        metadata_path.set_file_name(format!(".{}", self.pr_num));
+        let metadata_path = self.metadata_path();
         let data = fs::read_to_string(metadata_path).context("Failed to read metadata file")?;
         let metadata: ReviewMetadata =
             serde_json::from_str(&data).context("Failed to parse metadata json")?;
@@ -174,5 +204,12 @@ impl Review {
         p.push(format!("{}.prr", self.pr_num));
 
         p
+    }
+
+    fn metadata_path(&self) -> PathBuf {
+        let mut metadata_path = self.path();
+        metadata_path.set_file_name(format!(".{}", self.pr_num));
+
+        metadata_path
     }
 }

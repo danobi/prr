@@ -74,7 +74,7 @@ impl Prr {
     }
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
-        let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
+        let mut review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let (review_action, review_comment, inline_comments) = review.comments()?;
 
         if review_comment.is_empty() && inline_comments.is_empty() {
@@ -136,6 +136,10 @@ impl Prr {
                         .context("Failed to decode failed response")?;
                     bail!("Error during POST: Status code: {}, Body: {}", status, text);
                 }
+
+                review
+                    .mark_submitted()
+                    .context("Failed to update review metadata")?;
 
                 Ok(())
             }
