@@ -1,6 +1,7 @@
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -63,10 +64,23 @@ impl Review {
             .ok_or_else(|| anyhow!("Review path has no parent!"))?;
         fs::create_dir_all(&review_dir).context("Failed to create workdir directories")?;
 
+        // Check if there are unsubmitted changes
+        if review
+            .unsubmitted()
+            .context("Failed to check for unsubmitted review")?
+        {
+            bail!(
+                "You have unsubmitted changes to the requested review. \
+                Either submit the existing changes, delete the existing review file, \
+                or re-run this command with --force."
+            );
+        }
+
         // Now create review file
         let mut review_file = OpenOptions::new()
             .write(true)
-            .create_new(true)
+            .create(true)
+            .truncate(true)
             .open(&review_path)
             .context("Failed to create review file")?;
         let review_contents = prefix_lines(&diff, "> ");
@@ -194,6 +208,34 @@ impl Review {
         }
 
         Ok(())
+    }
+
+    /// Returns whether or not there exist unsubmitted changes on disk
+    fn unsubmitted(&self) -> Result<bool> {
+        let data =
+            fs::read_to_string(self.metadata_path()).context("Failed to read metadata file")?;
+        let metadata: ReviewMetadata =
+            serde_json::from_str(&data).context("Failed to parse metadata json")?;
+
+        let file_metadata = match fs::metadata(self.path()) {
+            Ok(m) => m,
+            Err(e) => match e.kind() {
+                // If there's not yet a review file, it cannot be unsubmitted
+                ErrorKind::NotFound => return Ok(false),
+                _ => bail!("Failed to open review file: {}", e),
+            },
+        };
+        let mtime: u64 = file_metadata
+            .mtime()
+            .try_into()
+            .context("mtime is negative")?;
+
+        match metadata.submitted {
+            // If modified time is more recent than last submission, then unsubmitted
+            Some(t) => Ok(mtime > t),
+            // If no last submission time, then default to unsubmitted
+            None => Ok(true),
+        }
     }
 
     /// Returns path to user-facing review file
