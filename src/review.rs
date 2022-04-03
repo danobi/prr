@@ -149,7 +149,7 @@ impl Review {
     }
 
     /// Update the review file's submission time
-    pub fn mark_submitted(&mut self) -> Result<()> {
+    pub fn mark_submitted(&self) -> Result<()> {
         let metadata_path = self.metadata_path();
         let data = fs::read_to_string(&metadata_path).context("Failed to read metadata file")?;
         let mut metadata: ReviewMetadata =

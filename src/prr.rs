@@ -74,7 +74,7 @@ impl Prr {
     }
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
-        let mut review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
+        let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let (review_action, review_comment, inline_comments) = review.comments()?;
 
         if review_comment.is_empty() && inline_comments.is_empty() {
