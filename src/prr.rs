@@ -62,7 +62,13 @@ impl Prr {
         }
     }
 
-    pub async fn get_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
+    pub async fn get_pr(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_num: u64,
+        force: bool,
+    ) -> Result<Review> {
         let diff = self
             .crab
             .pulls(owner, repo)
@@ -70,7 +76,7 @@ impl Prr {
             .await
             .context("Failed to fetch diff")?;
 
-        Review::new(&self.workdir()?, diff, owner, repo, pr_num)
+        Review::new(&self.workdir()?, diff, owner, repo, pr_num, force)
     }
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {

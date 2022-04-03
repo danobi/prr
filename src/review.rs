@@ -49,6 +49,7 @@ impl Review {
         owner: &str,
         repo: &str,
         pr_num: u64,
+        force: bool,
     ) -> Result<Review> {
         let review = Review {
             workdir: workdir.to_owned(),
@@ -65,9 +66,10 @@ impl Review {
         fs::create_dir_all(&review_dir).context("Failed to create workdir directories")?;
 
         // Check if there are unsubmitted changes
-        if review
-            .unsubmitted()
-            .context("Failed to check for unsubmitted review")?
+        if !force
+            && review
+                .unsubmitted()
+                .context("Failed to check for unsubmitted review")?
         {
             bail!(
                 "You have unsubmitted changes to the requested review. \
