@@ -214,8 +214,14 @@ impl Review {
 
     /// Returns whether or not there exist unsubmitted changes on disk
     fn unsubmitted(&self) -> Result<bool> {
-        let data =
-            fs::read_to_string(self.metadata_path()).context("Failed to read metadata file")?;
+        let data = match fs::read_to_string(self.metadata_path()) {
+            Ok(d) => d,
+            Err(e) => match e.kind() {
+                // If there's not yet a metadata file, means review not started yet
+                ErrorKind::NotFound => return Ok(false),
+                _ => bail!("Failed to read review metadata: {}", e),
+            },
+        };
         let metadata: ReviewMetadata =
             serde_json::from_str(&data).context("Failed to parse metadata json")?;
 
