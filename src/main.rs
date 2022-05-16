@@ -46,6 +46,7 @@ enum Command {
 }
 
 #[derive(Parser, Debug)]
+#[clap(version)]
 struct Args {
     /// Path to config file
     #[clap(long, parse(from_os_str))]
