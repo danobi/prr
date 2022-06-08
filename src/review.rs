@@ -206,7 +206,28 @@ impl Review {
             serde_json::from_str(&data).context("Failed to parse metadata json")?;
 
         if reconstructed != metadata.original {
-            bail!("Detected corruption in quoted part of review file");
+            // Be helpful and provide exact line number of mismatch.
+            //
+            // This loop on zip() will work as long as there isn't any truncation or trailing junk
+            // in the original text. To handle this case, there's the final bail!()
+            for (idx, (l, r)) in reconstructed
+                .lines()
+                .zip(metadata.original.lines())
+                .enumerate()
+            {
+                if l != r {
+                    // Get number of user generated lines up until the mismatch
+                    let user_lines = contents
+                        .lines()
+                        .take(idx)
+                        .filter(|l| !l.starts_with("> "))
+                        .count();
+                    let err = format!("Line {}, found '{l}' expected '{r}'", idx + 1 + user_lines);
+                    bail!("Detected corruption in quoted part of review file: {err}");
+                }
+            }
+
+            bail!("Detected corruption in quoted part of review file: found trailing or truncated lines");
         }
 
         Ok(())
