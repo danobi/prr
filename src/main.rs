@@ -17,7 +17,7 @@ lazy_static! {
     //
     //      danobi/prr-test-repo/6
     //
-    static ref SHORT: Regex = Regex::new(r"^(?P<org>[[:print:]]+)/(?P<repo>[[:print:]]+)/(?P<pr_num>\d+)").unwrap();
+    static ref SHORT: Regex = Regex::new(r"^(?P<org>[\w\-_]+)/(?P<repo>[\w\-_]+)/(?P<pr_num>\d+)").unwrap();
 
     // Regex for url input. Url looks something like:
     //
