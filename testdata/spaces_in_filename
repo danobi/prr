@@ -1,0 +1,14 @@
+> diff --git a/build/scripts/grafana/provisioning/dashboards/Docker Prometheus Monitoring-1571332751387.json b/build/scripts/grafana/provisioning/dashboards/Docker Prometheus Monitoring-1571332751387.json
+> new file mode 100644
+> index 0000000..5daac7b
+> --- /dev/null
+> +++ b/build/scripts/grafana/provisioning/dashboards/Docker Prometheus Monitoring-1571332751387.json	
+> @@ -0,0 +1,1831 @@
+> +{
+> +    "annotations": {
+foo
+> +      "list": [
+> +        {
+> +          "builtIn": 1,
+> +          "datasource": "-- Grafana --",
+

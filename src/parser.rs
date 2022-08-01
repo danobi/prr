@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -9,6 +9,11 @@ lazy_static! {
     //      `@@ -731,7 +731,7 @@[...]`
     //
     static ref HUNK_START: Regex = Regex::new(r"^@@ -(?P<lstart>\d+),\d+ \+(?P<rstart>\d+),\d+ @@").unwrap();
+    // Regex for start of a file diff. The start of a file diff should look like:
+    //
+    //      `diff --git a/ch1.txt b/ch1.txt`
+    //
+    static ref DIFF_START: Regex = Regex::new(r"^diff --git a/.+ b/(?P<new>.+)$").unwrap();
 }
 
 /// The location of a line
@@ -148,23 +153,13 @@ fn is_prr_directive(s: &str) -> Option<&str> {
 
 /// Parses the new filename out of a diff header
 fn parse_diff_header(line: &str) -> Result<String> {
-    let parts: Vec<&str> = line.split(' ').collect();
-    if parts.len() != 4 {
-        bail!(
-            "Invalid diff header: expected 4 parts, found {}",
-            parts.len()
-        );
-    }
+    if let Some(captures) = DIFF_START.captures(line) {
+        let new: &str = captures.name("new").unwrap().as_str();
 
-    // Final part of diff header will be something like:
-    //
-    //      `b/path/to/file`
-    //
-    if !parts[3].starts_with("b/") {
-        bail!("Invalid diff header: final file path does not begin with 'b/'");
+        Ok(new.trim().to_owned())
+    } else {
+        Err(anyhow!("Invalid diff header: could not parse"))
     }
-
-    Ok(parts[3][2..].trim().to_owned())
 }
 
 /// Parses the starting left & right lines out of the hunk start
@@ -647,6 +642,20 @@ mod tests {
             line: LineLocation::Left(59),
             start_line: Some(LineLocation::Left(1)),
             comment: "Comment 1".to_string(),
+        })];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    /// https://github.com/danobi/prr/issues/3
+    fn spaces_in_filename() {
+        let input = include_str!("../testdata/spaces_in_filename");
+        let expected = vec![Comment::Inline(InlineComment {
+            file: "build/scripts/grafana/provisioning/dashboards/Docker Prometheus Monitoring-1571332751387.json".to_string(),
+            line: LineLocation::Right(2),
+            start_line: None,
+            comment: "foo".to_string(),
         })];
 
         test(input, &expected);
