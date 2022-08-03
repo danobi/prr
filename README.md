@@ -17,15 +17,21 @@ browser to cross reference code from the changes was driving me nuts.
 
 ### Installation / Quickstart
 
-1. Install rust toolchain (if you haven't already): https://rustup.rs/
+1. Install `prr`:
 
-2. Install `prr`:
+    - **Option 1:** Install rust toolchain (if you haven't already): https://rustup.rs/
 
-    ```sh
-    $ cargo install prr
-    ```
+        ```sh
+        $ cargo install prr
+        ```
 
-3. Create a Github Personal Access Token (PAT) for `prr`:
+    - **Option 2:** [Homebrew](https://brew.sh/)
+
+        ```sh
+        $ brew install prr
+        ```
+
+2. Create a Github Personal Access Token (PAT) for `prr`:
 
     `prr` will need this token so it can make GH API calls on your behalf.
     Create the token by going to `Settings -> Developer settings -> Personal
@@ -33,7 +39,7 @@ browser to cross reference code from the changes was driving me nuts.
 
     Keep the newly generated token handy for the next step.
 
-4. Create a `prr` config file:
+3. Create a `prr` config file:
 
     ```sh
     $ mkdir -p ~/.config/prr
@@ -48,7 +54,7 @@ browser to cross reference code from the changes was driving me nuts.
     where `$YOUR_PAT_FROM_LAST_STEP` is the PAT token from step 3 and `workdir`
     is the directory you want `prr` to place all your review files.
 
-5. Review your first PR:
+4. Review your first PR:
 
     Feel free to test `prr` out against my test repository, by the way.
 
