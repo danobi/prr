@@ -10,12 +10,18 @@ use serde_json::{json, Value};
 use crate::parser::{LineLocation, ReviewAction};
 use crate::review::Review;
 
+const GITHUB_BASE_URL: &str = "https://api.github.com";
+
 #[derive(Debug, Deserialize)]
 struct PrrConfig {
     /// GH personal token
     token: String,
     /// Directory to place review files
     workdir: Option<String>,
+    /// Github URL
+    ///
+    /// Useful for enterprise instances with custom URLs
+    url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -37,6 +43,8 @@ impl Prr {
         let config: Config = toml::from_str(&config_contents).context("Failed to parse toml")?;
         let octocrab = Octocrab::builder()
             .personal_token(config.prr.token.clone())
+            .base_url(config.prr.url.as_deref().unwrap_or(GITHUB_BASE_URL))
+            .context("Failed to parse github base URL")?
             .build()
             .context("Failed to create GH client")?;
 

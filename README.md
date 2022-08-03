@@ -109,3 +109,18 @@ and `syntax` configs to enable syntax highlighting for `prr` review files.
 
 It can be pretty hard to look at a diff without having deletes and additions
 highlighted in different colors.
+
+### Config
+
+`prr` supports various configuration options. The config file must be located
+at `$XDG_CONFIG_HOME/prr/config.toml`. This typically expands to
+`$HOME/.config/prr/config.toml`.
+
+#### [prr]
+
+The `[prr]` table controls installation wide settings. Currently this is the
+only table.
+
+* `prr.token`: Personal authentication token (required)
+* `prr.workdir`: Directory to place review files (optional)
+* `prr.url`: URL to github API (optional)
