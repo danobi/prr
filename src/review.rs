@@ -24,13 +24,18 @@ pub struct Review {
 
 /// Metadata for a single review. Stored as dotfile next to user-facing review file
 #[derive(Serialize, Deserialize, Debug)]
-struct ReviewMetadata {
+pub(crate) struct ReviewMetadata {
     /// Original .diff file contents. Used to detect corrupted review files
     original: String,
     /// Time (seconds since epoch) the review file was last submitted
     submitted: Option<u64>,
     /// The commit hash of the PR at the time the review was started
     commit_id: Option<String>,
+}
+impl ReviewMetadata {
+    pub(crate) fn get_commit_id(&self) -> Option<&str> {
+        self.commit_id.as_ref().map(|v| v.as_str())
+    }
 }
 
 fn prefix_lines(s: &str, prefix: &str) -> String {
@@ -171,9 +176,7 @@ impl Review {
     /// Update the review file's submission time
     pub fn mark_submitted(&self) -> Result<()> {
         let metadata_path = self.metadata_path();
-        let data = fs::read_to_string(&metadata_path).context("Failed to read metadata file")?;
-        let mut metadata: ReviewMetadata =
-            serde_json::from_str(&data).context("Failed to parse metadata json")?;
+        let mut metadata = self.get_metadata()?;
 
         let submission_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -204,10 +207,7 @@ impl Review {
             }
         }
 
-        let metadata_path = self.metadata_path();
-        let data = fs::read_to_string(metadata_path).context("Failed to read metadata file")?;
-        let metadata: ReviewMetadata =
-            serde_json::from_str(&data).context("Failed to parse metadata json")?;
+        let metadata = self.get_metadata()?;
 
         if reconstructed != metadata.original {
             // Be helpful and provide exact line number of mismatch.
@@ -279,6 +279,13 @@ impl Review {
         p.push(format!("{}.prr", self.pr_num));
 
         p
+    }
+
+    /// Loads and returns the parsed contents of the metadata file for the review file
+    pub(crate) fn get_metadata(&self) -> Result<ReviewMetadata> {
+        let meta =
+            fs::read_to_string(self.metadata_path()).context("Failed to load metadata file")?;
+        serde_json::from_str::<ReviewMetadata>(&meta).context("Failed to parse metadata file")
     }
 
     fn metadata_path(&self) -> PathBuf {
