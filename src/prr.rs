@@ -105,6 +105,7 @@ impl Prr {
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let (review_action, review_comment, inline_comments) = review.comments()?;
+        let metadata = review.get_metadata()?;
 
         if review_comment.is_empty() && inline_comments.is_empty() {
             bail!("No review comments");
@@ -112,6 +113,7 @@ impl Prr {
 
         let body = json!({
             "body": review_comment,
+            "commit_id": metadata.get_commit_id(),
             "event": match review_action {
                 ReviewAction::Approve => "APPROVE",
                 ReviewAction::RequestChanges => "REQUEST_CHANGES",
