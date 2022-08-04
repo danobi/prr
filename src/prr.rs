@@ -77,14 +77,29 @@ impl Prr {
         pr_num: u64,
         force: bool,
     ) -> Result<Review> {
-        let diff = self
-            .crab
-            .pulls(owner, repo)
+        let pr_handler = self.crab.pulls(owner, repo);
+
+        let diff = pr_handler
             .get_diff(pr_num)
             .await
             .context("Failed to fetch diff")?;
 
-        Review::new(&self.workdir()?, diff, owner, repo, pr_num, force)
+        let commit_id = pr_handler
+            .get(pr_num)
+            .await
+            .context("Failed to fetch commit ID")?
+            .head
+            .sha;
+
+        Review::new(
+            &self.workdir()?,
+            diff,
+            owner,
+            repo,
+            pr_num,
+            commit_id,
+            force,
+        )
     }
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {

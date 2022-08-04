@@ -29,6 +29,8 @@ struct ReviewMetadata {
     original: String,
     /// Time (seconds since epoch) the review file was last submitted
     submitted: Option<u64>,
+    /// The commit hash of the PR at the time the review was started
+    commit_id: Option<String>,
 }
 
 fn prefix_lines(s: &str, prefix: &str) -> String {
@@ -49,6 +51,7 @@ impl Review {
         owner: &str,
         repo: &str,
         pr_num: u64,
+        commit_id: String,
         force: bool,
     ) -> Result<Review> {
         let review = Review {
@@ -94,6 +97,7 @@ impl Review {
         let metadata = ReviewMetadata {
             original: diff,
             submitted: None,
+            commit_id: Some(commit_id),
         };
         let json = serde_json::to_string(&metadata)?;
         let metadata_path = review.metadata_path();
