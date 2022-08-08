@@ -111,9 +111,8 @@ impl Prr {
             bail!("No review comments");
         }
 
-        let body = json!({
+        let mut body = json!({
             "body": review_comment,
-            "commit_id": metadata.get_commit_id(),
             "event": match review_action {
                 ReviewAction::Approve => "APPROVE",
                 ReviewAction::RequestChanges => "REQUEST_CHANGES",
@@ -147,6 +146,14 @@ impl Prr {
                 })
                 .collect::<Vec<Value>>(),
         });
+        if let Some(id) = metadata.get_commit_id() {
+            match &mut body {
+                serde_json::Value::Object(obj) => {
+                    obj.insert("commit_id".to_string(), json!(id));
+                }
+                _ => {}
+            }
+        }
 
         if debug {
             println!("{}", serde_json::to_string_pretty(&body)?);
