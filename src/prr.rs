@@ -147,11 +147,8 @@ impl Prr {
                 .collect::<Vec<Value>>(),
         });
         if let Some(id) = metadata.get_commit_id() {
-            match &mut body {
-                serde_json::Value::Object(obj) => {
-                    obj.insert("commit_id".to_string(), json!(id));
-                }
-                _ => {}
+            if let serde_json::Value::Object(ref mut obj) = body {
+                obj.insert("commit_id".to_string(), json!(id));
             }
         }
 

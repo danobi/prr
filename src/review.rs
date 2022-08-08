@@ -34,7 +34,7 @@ pub(crate) struct ReviewMetadata {
 }
 impl ReviewMetadata {
     pub(crate) fn get_commit_id(&self) -> Option<&str> {
-        self.commit_id.as_ref().map(|v| v.as_str())
+        self.commit_id.as_deref()
     }
 }
 
