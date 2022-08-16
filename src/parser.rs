@@ -8,7 +8,7 @@ lazy_static! {
     //
     //      `@@ -731,7 +731,7 @@[...]`
     //
-    static ref HUNK_START: Regex = Regex::new(r"^@@ -(?P<lstart>\d+),\d+ \+(?P<rstart>\d+),\d+ @@").unwrap();
+    static ref HUNK_START: Regex = Regex::new(r"^@@ -(?P<lstart>\d+),(?P<llen>\d+) \+(?:(?P<rstart>\d+),)?(?P<rlen>\d+) @@").unwrap();
     // Regex for start of a file diff. The start of a file diff should look like:
     //
     //      `diff --git a/ch1.txt b/ch1.txt`
@@ -174,8 +174,13 @@ fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
 
         let hunk_start_line_right: u64 = captures
             .name("rstart")
-            .unwrap()
-            .as_str()
+            .map(|s| s.as_str()).unwrap_or_else(||
+                if hunk_start_line_left == 0 {
+                    "0"
+                } else {
+                    unreachable!("")
+                }
+            )
             .parse()
             .context("Failed to parse hunk start right line")?;
 
@@ -185,9 +190,6 @@ fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
         // For the side that is zero, we allow the "UB" of underflowing when the
         // caller subtracts 1 from the result. That is OK b/c we will never use that
         // value, as you cannot comment on text that does not exist.
-        if hunk_start_line_left + hunk_start_line_right == 0 {
-            bail!("Both hunks lines start at 0");
-        }
 
         return Ok(Some((hunk_start_line_left, hunk_start_line_right)));
     }
@@ -622,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn add_file() {
+    fn add_oneliner() {
         let input = include_str!("../testdata/add_oneliner");
         let expected = vec![
         Comment::Inline(InlineComment {
@@ -703,5 +705,24 @@ mod tests {
     fn unknown_directive() {
         let input = include_str!("../testdata/unknown_directive");
         test_fail(input);
+    }
+
+    #[test]
+    fn hunk_oneliner_regex() {
+        let captures = HUNK_START.captures("@@ -0,0 +1 @@").expect("Must match regex.");
+        assert!(captures.name("rstart").is_none());
+        assert_eq!(captures.name("rlen").unwrap().as_str(), "1");
+        assert_eq!(captures.name("lstart").unwrap().as_str(), "0");
+        assert_eq!(captures.name("llen").unwrap().as_str(), "0");
+    }
+
+
+    #[test]
+    fn hunk_normal_regex() {
+        let captures = HUNK_START.captures("@@ -0,7 +0,1 @@").expect("Must match regex.");
+        assert_eq!(captures.name("rstart").unwrap().as_str(), "0");
+        assert_eq!(captures.name("rlen").unwrap().as_str(), "1");
+        assert_eq!(captures.name("lstart").unwrap().as_str(), "0");
+        assert_eq!(captures.name("llen").unwrap().as_str(), "7");
     }
 }
