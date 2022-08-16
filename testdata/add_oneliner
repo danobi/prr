@@ -1,0 +1,9 @@
+> diff --git a/foo.rs b/foo.rs
+> new file mode 100644
+> index 0000000..5a64612
+> --- /dev/null
+> +++ b/foo.rs
+> @@ -0,0 +1 @@
+> +License: Unlicense
+
+Comment 1

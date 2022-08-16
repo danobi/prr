@@ -622,6 +622,20 @@ mod tests {
     }
 
     #[test]
+    fn add_file() {
+        let input = include_str!("../testdata/add_oneliner");
+        let expected = vec![
+        Comment::Inline(InlineComment {
+            file: "foo.rs".to_string(),
+            line: LineLocation::Right(1),
+            start_line: None,
+            comment: "Comment 1".to_string(),
+        })];
+
+        test(input, &expected);
+    }
+
+    #[test]
     fn deleted_file() {
         let input = include_str!("../testdata/deleted_file");
         let expected = vec![Comment::Inline(InlineComment {
