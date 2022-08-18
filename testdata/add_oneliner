@@ -4,6 +4,9 @@
 > --- /dev/null
 > +++ b/foo.rs
 > @@ -0,0 +1 @@
-> +License: Unlicense
 
 Comment 1
+
+> +License: Unlicense
+
+Comment 2

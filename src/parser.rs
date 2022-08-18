@@ -183,13 +183,9 @@ fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
             )
             .parse()
             .context("Failed to parse hunk start right line")?;
-
-        // Hunks starting at line 0 implies the file was new (left side) or deleted
-        // (right side). Ensure that at least one of the start lines is non-zero.
-        //
-        // For the side that is zero, we allow the "UB" of underflowing when the
-        // caller subtracts 1 from the result. That is OK b/c we will never use that
-        // value, as you cannot comment on text that does not exist.
+        // Note that for newly added files or deleted files, both sides
+        // of the line info might be zero. `saturating_*` operations must hence
+        // be used for the following substraction to be safe.
 
         return Ok(Some((hunk_start_line_left, hunk_start_line_right)));
     }
@@ -627,12 +623,18 @@ mod tests {
     fn add_oneliner() {
         let input = include_str!("../testdata/add_oneliner");
         let expected = vec![
-        Comment::Inline(InlineComment {
-            file: "foo.rs".to_string(),
-            line: LineLocation::Right(1),
-            start_line: None,
-            comment: "Comment 1".to_string(),
-        })];
+            Comment::Inline(InlineComment {
+                file: "foo.rs".to_string(),
+                line: LineLocation::Right(0),
+                start_line: None,
+                comment: "Comment 1".to_string(),
+            }),
+            Comment::Inline(InlineComment {
+                file: "foo.rs".to_string(),
+                line: LineLocation::Right(1),
+                start_line: None,
+                comment: "Comment 2".to_string(),
+            })];
 
         test(input, &expected);
     }
