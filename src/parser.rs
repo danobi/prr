@@ -178,7 +178,7 @@ fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
                 if hunk_start_line_left == 0 {
                     "0"
                 } else {
-                    unreachable!("")
+                    unreachable!("Unexpected non-zero left-hand-side of git diff header. Expected 0.")
                 }
             )
             .parse()
