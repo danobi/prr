@@ -174,13 +174,16 @@ fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
 
         let hunk_start_line_right: u64 = captures
             .name("rstart")
-            .map(|s| s.as_str()).unwrap_or_else(||
+            .map(|s| s.as_str())
+            .unwrap_or_else(|| {
                 if hunk_start_line_left == 0 {
                     "0"
                 } else {
-                    unreachable!("Unexpected non-zero left-hand-side of git diff header. Expected 0.")
+                    unreachable!(
+                        "Unexpected non-zero left-hand-side of git diff header. Expected 0."
+                    )
                 }
-            )
+            })
             .parse()
             .context("Failed to parse hunk start right line")?;
         // Note that for newly added files or deleted files, both sides
@@ -634,7 +637,8 @@ mod tests {
                 line: LineLocation::Right(1),
                 start_line: None,
                 comment: "Comment 2".to_string(),
-            })];
+            }),
+        ];
 
         test(input, &expected);
     }
@@ -711,17 +715,20 @@ mod tests {
 
     #[test]
     fn hunk_oneliner_regex() {
-        let captures = HUNK_START.captures("@@ -0,0 +1 @@").expect("Must match regex.");
+        let captures = HUNK_START
+            .captures("@@ -0,0 +1 @@")
+            .expect("Must match regex.");
         assert!(captures.name("rstart").is_none());
         assert_eq!(captures.name("rlen").unwrap().as_str(), "1");
         assert_eq!(captures.name("lstart").unwrap().as_str(), "0");
         assert_eq!(captures.name("llen").unwrap().as_str(), "0");
     }
 
-
     #[test]
     fn hunk_normal_regex() {
-        let captures = HUNK_START.captures("@@ -0,7 +0,1 @@").expect("Must match regex.");
+        let captures = HUNK_START
+            .captures("@@ -0,7 +0,1 @@")
+            .expect("Must match regex.");
         assert_eq!(captures.name("rstart").unwrap().as_str(), "0");
         assert_eq!(captures.name("rlen").unwrap().as_str(), "1");
         assert_eq!(captures.name("lstart").unwrap().as_str(), "0");
