@@ -22,7 +22,7 @@ lazy_static! {
 /// deleted or added lines. A useful way to think about the line location is
 /// the line number a comment should be attached to in the file pre-change (left)
 /// or the file post-change (right)
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LineLocation {
     /// The "red"/deleted side of the diff
     Left(u64),
@@ -31,7 +31,7 @@ pub enum LineLocation {
 }
 
 /// Represents a single inline comment on a review
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InlineComment {
     /// File the comment is in
     ///
@@ -44,7 +44,7 @@ pub struct InlineComment {
     pub comment: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ReviewAction {
     Approve,
     RequestChanges,
@@ -52,7 +52,7 @@ pub enum ReviewAction {
 }
 
 /// Represents a comment of some sort on a review
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Comment {
     /// Overall review comment (the summary comment)
     Review(String),
