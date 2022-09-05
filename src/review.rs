@@ -309,3 +309,47 @@ impl Review {
         metadata_path
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::{create_dir_all, File};
+    use tempfile::{tempdir, TempDir};
+
+    fn setup(review: &str, metadata: &str) -> (Review, TempDir) {
+        let dir = tempdir().expect("Failed to create tempdir");
+
+        // Create directory structure
+        let project_dir = dir.path().join("some_owner").join("some_repo");
+        create_dir_all(&project_dir).expect("Failed to create workdir structure");
+
+        // Create and write review file
+        let mut review_file =
+            File::create(project_dir.join("3.prr")).expect("Failed to create review file");
+        review_file
+            .write_all(review.as_bytes())
+            .expect("Failed to write review file");
+
+        // Create and write metadata file
+        let mut metadata_file =
+            File::create(project_dir.join(".3")).expect("Failed to create metadata file");
+        metadata_file
+            .write_all(metadata.as_bytes())
+            .expect("Failed to write metadata file");
+
+        let r = Review::new_existing(dir.path(), "some_owner", "some_repo", 3);
+
+        (r, dir)
+    }
+
+    // Review file has all trailing whitespace stripped
+    #[test]
+    fn test_validate_stripped() {
+        let review = include_str!("../testdata/review/trailing_whitespace/review");
+        let metadata = include_str!("../testdata/review/trailing_whitespace/metadata");
+        let (r, _dir) = setup(review, metadata);
+
+        r.validate_review_file(review)
+            .expect("Failed to validate review file");
+    }
+}
