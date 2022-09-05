@@ -219,11 +219,11 @@ impl ReviewParser {
     }
 
     pub fn parse_line(&mut self, mut line: &str) -> Result<Option<Comment>> {
-        let is_quoted = line.starts_with(">");
+        let is_quoted = line.starts_with('>');
         if is_quoted {
             if let Some(stripped) = line.strip_prefix("> ") {
                 line = stripped;
-            } else if let Some(stripped) = line.strip_prefix(">") {
+            } else if let Some(stripped) = line.strip_prefix('>') {
                 line = stripped;
             }
         }

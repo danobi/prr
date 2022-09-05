@@ -1,3 +1,4 @@
+use std::fmt::Write as fmt_write;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Write};
@@ -46,7 +47,8 @@ fn prefix_lines(s: &str, prefix: &str) -> String {
         if line.is_empty() {
             ret += prefix;
         } else {
-            ret += &format!("{} {}\n", prefix, line);
+            // Appending to heap allocated string cannot fail
+            writeln!(ret, "{} {}", prefix, line).expect("Failed to write to string");
         }
     }
 
@@ -238,7 +240,7 @@ impl Review {
                     let user_lines = contents
                         .lines()
                         .take(idx)
-                        .filter(|l| !l.starts_with(">"))
+                        .filter(|l| !l.starts_with('>'))
                         .count();
                     let err = format!("Line {}, found '{l}' expected '{r}'", idx + 1 + user_lines);
                     bail!("Detected corruption in quoted part of review file: {err}");
