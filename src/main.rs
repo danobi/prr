@@ -160,6 +160,8 @@ fn parse_pr_str<'a>(s: &'a str) -> Result<(String, String, u64)> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
+
     let args = Args::parse();
 
     // Figure out where config file is
