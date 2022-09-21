@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser, Subcommand,
+};
+use fs_err as fs;
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 

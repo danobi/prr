@@ -1,4 +1,4 @@
-use std::fs;
+use crate::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
