@@ -22,8 +22,9 @@ lazy_static! {
     // Regex for short input. Example:
     //
     //      danobi/prr-test-repo/6
+    //      danobi/prr-test-repo/pull/6
     //
-    static ref SHORT: Regex = Regex::new(r"^(?P<org>[\w\-_]+)/(?P<repo>[\w\-_]+)/(?P<pr_num>\d+)").unwrap();
+    static ref SHORT: Regex = Regex::new(r"^(?P<org>[\w\-_]+)/(?P<repo>[\w\-_]+)/(?:pull/)?(?P<pr_num>\d+)").unwrap();
 
     // Regex for url input. Url looks something like:
     //
