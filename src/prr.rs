@@ -102,7 +102,7 @@ impl Prr {
         )
     }
 
-    pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
+    pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let (review_action, review_comment, inline_comments) = review.comments()?;
         let metadata = review.get_metadata()?;
@@ -152,16 +152,12 @@ impl Prr {
             }
         }
 
-        if debug {
-            println!("{}", serde_json::to_string_pretty(&body)?);
-        }
+        log::trace!("json to be sent:\n{}", serde_json::to_string_pretty(&body)?);
 
         let path = format!("/repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
-        match self
-            .crab
-            ._post(self.crab.absolute_url(path)?, Some(&body))
-            .await
-        {
+        let url = self.crab.absolute_url(path)?;
+        log::debug!("Dispatching request to {:?}", url);
+        match self.crab._post(url, Some(&body)).await {
             Ok(resp) => {
                 let status = resp.status();
                 if status != StatusCode::OK {
@@ -180,11 +176,10 @@ impl Prr {
             }
             // GH is known to send unescaped control characters in JSON responses which
             // serde will fail to parse (not that it should succeed)
-            Err(octocrab::Error::Json {
-                source: _,
-                backtrace: _,
-            }) => {
-                eprintln!("Warning: GH response had invalid JSON");
+            Err(octocrab::Error::Json { source, backtrace }) => {
+                log::warn!("GH response had invalid JSON");
+                log::trace!("source: {source:?}");
+                log::trace!("backtrace: {backtrace:?}");
                 Ok(())
             }
             Err(e) => bail!("Error during POST: {}", e),

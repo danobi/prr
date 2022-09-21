@@ -118,8 +118,6 @@ enum Command {
     Submit {
         /// Pull request to review (eg. `danobi/prr/24`)
         pr: String,
-        #[clap(short, long)]
-        debug: bool,
     },
 }
 
@@ -129,6 +127,10 @@ struct Args {
     /// Path to config file
     #[clap(long, parse(from_os_str))]
     config: Option<PathBuf>,
+
+    #[clap(flatten)]
+    verbosity: clap_verbosity_flag::Verbosity,
+
     #[clap(subcommand)]
     command: Command,
 }
@@ -160,9 +162,12 @@ fn parse_pr_str<'a>(s: &'a str) -> Result<(String, String, u64)> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
-
     let args = Args::parse();
+
+    let logger = env_logger::builder()
+        .filter_level(args.verbosity.log_level_filter())
+        .build();
+    log::set_logger(Box::leak(Box::new(logger)))?;
 
     // Figure out where config file is
     let config_path = match args.config {
@@ -173,13 +178,15 @@ async fn main() -> Result<()> {
         }
     };
 
+    log::debug!("Loading config from {}", config_path.display());
+
     let prr = Prr::new(&config_path)?;
 
     match args.command {
         Command::Get { pr, force, edit } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
-            println!("{}", review.path().display());
+            log::info!("{}", review.path().display());
             if let Some(edit) = edit {
                 let program = ProgramPath::from(edit).path()?;
                 anyhow::bail!(std::process::Command::new(program)
@@ -187,9 +194,9 @@ async fn main() -> Result<()> {
                     .exec());
             }
         }
-        Command::Submit { pr, debug } => {
+        Command::Submit { pr } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
-            prr.submit_pr(&owner, &repo, pr_num, debug).await?;
+            prr.submit_pr(&owner, &repo, pr_num).await?;
         }
     }
 
