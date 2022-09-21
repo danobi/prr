@@ -112,7 +112,7 @@ enum Command {
         // TODO Currntly can't use the enum directly due to
         // TODOO clap_derive issue <https://github.com/clap-rs/clap/issues/2621>
         #[clap(short, long)]
-        edit: Option<Option<PathBuf>>,
+        editor: Option<Option<PathBuf>>,
     },
     /// Submit a review
     Submit {
@@ -183,12 +183,12 @@ async fn main() -> Result<()> {
     let prr = Prr::new(&config_path)?;
 
     match args.command {
-        Command::Get { pr, force, edit } => {
+        Command::Get { pr, force, editor } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             log::info!("{}", review.path().display());
-            if let Some(edit) = edit {
-                let program = ProgramPath::from(edit).path()?;
+            if let Some(editor) = editor {
+                let program = ProgramPath::from(editor).path()?;
                 anyhow::bail!(std::process::Command::new(program)
                     .args(&[review.path()])
                     .exec());
