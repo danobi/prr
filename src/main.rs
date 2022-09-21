@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    os::unix::process::CommandExt,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{bail, Context, Result};
 use clap::{
@@ -29,6 +32,70 @@ lazy_static! {
     static ref URL: Regex = Regex::new(r".*github\.com/(?P<org>.+)/(?P<repo>.+)/pull/(?P<pr_num>\d+)").unwrap();
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
+
+enum ProgramPath {
+    OpenEditor,
+    OpenWith { path: PathBuf },
+}
+
+impl From<Option<PathBuf>> for ProgramPath {
+    fn from(op: Option<PathBuf>) -> Self {
+        if let Some(path) = op {
+            Self::OpenWith { path }
+        } else {
+            Self::OpenEditor
+        }
+    }
+}
+
+impl ProgramPath {
+    /// Resolve the file path using relative/absolute path checks
+    /// or fall back to resolving a binary with `which`.
+    fn resolve(path: impl AsRef<Path>) -> Result<PathBuf> {
+        let path = path.as_ref();
+        // don't care if relative or absolute path
+        if path.is_file() {
+            Ok(if path.is_relative() {
+                let program = std::env::current_dir()?.join(path);
+                debug_assert!(
+                    program.is_file(),
+                    "If it was a file before, making the path absolute is also a file. qed"
+                );
+                program
+            } else {
+                path.to_owned()
+            })
+        } else if let Ok(program) = which::which(path) {
+            Ok(program)
+        } else {
+            anyhow::bail!(
+                "Could not find program using `which` or using the given path: `{}`",
+                path.display()
+            )
+        }
+    }
+
+    /// Return the absolute path to the binary.
+    fn path(&self) -> Result<PathBuf> {
+        Ok(match self {
+            Self::OpenEditor => match std::env::var("EDITOR") {
+                Ok(val) if !val.is_empty() => {
+                    let program = PathBuf::from(&val);
+                    Self::resolve(program)?
+                }
+                Ok(_val) => anyhow::bail!("EDITOR env var set but empty"),
+                Err(e) => {
+                    log::debug!("Env var EDITOR is not set: {:?}", e);
+                    let program = PathBuf::from(xdg_utils::query_default_app("application/prr")?);
+                    Self::resolve(program)?
+                }
+            },
+            Self::OpenWith { ref path } => path.to_owned(),
+        })
+    }
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Get a pull request and begin a review
@@ -36,8 +103,17 @@ enum Command {
         /// Ignore unsubmitted review checks
         #[clap(short, long)]
         force: bool,
+
         /// Pull request to review (eg. `danobi/prr/24`)
         pr: String,
+
+        /// Open the PRR file with the default XDG application
+        /// or a provided binary residing at path or that can be
+        /// looked up with `which`.
+        // TODO Currntly can't use the enum directly due to
+        // TODOO clap_derive issue <https://github.com/clap-rs/clap/issues/2621>
+        #[clap(short, long)]
+        edit: Option<Option<PathBuf>>,
     },
     /// Submit a review
     Submit {
@@ -99,10 +175,16 @@ async fn main() -> Result<()> {
     let prr = Prr::new(&config_path)?;
 
     match args.command {
-        Command::Get { pr, force } => {
+        Command::Get { pr, force, edit } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             println!("{}", review.path().display());
+            if let Some(edit) = edit {
+                let program = ProgramPath::from(edit).path()?;
+                anyhow::bail!(std::process::Command::new(program)
+                    .args(&[review.path()])
+                    .exec());
+            }
         }
         Command::Submit { pr, debug } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
