@@ -1,6 +1,6 @@
-use std::fmt::Write as fmt_write;
 use crate::fs;
 use fs::OpenOptions;
+use std::fmt::Write as fmt_write;
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
