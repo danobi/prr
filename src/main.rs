@@ -77,8 +77,9 @@ impl OpenEditor {
     /// * Use `which::which` to resolve parentless paths.
     fn resolve(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        // don't care if relative or absolute path
+        log::trace!("Original program path or name is: {}", path.display());
 
+        // don't care if relative or absolute path
         let is_basename_only = path.parent().is_none() && !path.is_absolute();
 
         let resolved = if is_basename_only {
@@ -164,10 +165,9 @@ fn parse_pr_str<'a>(s: &'a str) -> Result<(String, String, u64)> {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let logger = env_logger::builder()
+    env_logger::Builder::from_env(env_logger::Env::new().filter_or("PRR", "warn"))
         .filter_level(args.verbosity.log_level_filter())
-        .build();
-    log::set_logger(Box::leak(Box::new(logger)))?;
+        .init();
 
     // Figure out where config file is
     let config_path = match args.config {
