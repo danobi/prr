@@ -80,12 +80,20 @@ impl OpenEditor {
         log::trace!("Original program path or name is: {}", path.display());
 
         // don't care if relative or absolute path
-        let is_basename_only = path.parent().is_none() && !path.is_absolute();
+        let is_basename_only = dbg!(path.parent()).is_none() && !path.is_absolute();
 
         let resolved = if is_basename_only {
+            log::trace!(
+                "Trying to resolve via PATH env variable using `which {}`",
+                path.display()
+            );
             which::which(path)?
         } else {
             let abs = if path.is_relative() {
+                log::trace!(
+                    "Concatentating current dir with {} to get abs path",
+                    path.display()
+                );
                 std::env::current_dir()?.join(path)
             } else {
                 path.to_owned()
