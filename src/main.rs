@@ -13,6 +13,7 @@ mod parser;
 mod prr;
 mod review;
 
+use prr::Config;
 use prr::Prr;
 
 // Use lazy static to ensure regex is only compiled once
@@ -33,65 +34,65 @@ lazy_static! {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
 
-enum ProgramPath {
-    OpenEditor,
-    OpenWith { path: PathBuf },
-}
+struct OpenEditor(PathBuf);
 
-impl From<Option<PathBuf>> for ProgramPath {
-    fn from(op: Option<PathBuf>) -> Self {
-        if let Some(path) = op {
-            Self::OpenWith { path }
-        } else {
-            Self::OpenEditor
-        }
-    }
-}
-
-impl ProgramPath {
-    /// Resolve the file path using relative/absolute path checks
-    /// or fall back to resolving a binary with `which`.
-    fn resolve(path: impl AsRef<Path>) -> Result<PathBuf> {
-        let path = path.as_ref();
-        // don't care if relative or absolute path
-        if path.is_file() {
-            Ok(if path.is_relative() {
-                let program = std::env::current_dir()?.join(path);
-                debug_assert!(
-                    program.is_file(),
-                    "If it was a file before, making the path absolute is also a file. qed"
-                );
-                program
-            } else {
-                path.to_owned()
-            })
-        } else if let Ok(program) = which::which(path) {
-            Ok(program)
-        } else {
-            anyhow::bail!(
-                "Could not find program using `which` or using the given path: `{}`",
-                path.display()
-            )
-        }
+impl OpenEditor {
+    fn as_path(&self) -> &Path {
+        self.0.as_path()
     }
 
-    /// Return the absolute path to the binary.
-    fn path(&self) -> Result<PathBuf> {
-        Ok(match self {
-            Self::OpenEditor => match std::env::var("EDITOR") {
+    pub fn new(config: &Config) -> Result<Self> {
+        let program = if let Some(ref program) = config.editor {
+            log::debug!(
+                "Using editor value from configuration: {}",
+                program.display()
+            );
+            program.clone()
+        } else {
+            match std::env::var("EDITOR") {
                 Ok(val) if !val.is_empty() => {
                     let program = PathBuf::from(&val);
-                    Self::resolve(program)?
+                    log::debug!("Using env var EDITOR: {}", program.display());
+                    program
                 }
                 Ok(_val) => anyhow::bail!("EDITOR env var set but empty"),
-                Err(e) => {
-                    log::debug!("Env var EDITOR is not set: {:?}", e);
-                    let program = PathBuf::from(xdg_utils::query_default_app("application/prr")?);
-                    Self::resolve(program)?
+                Err(err) => {
+                    log::debug!("Env var EDITOR is not set: {:?}", err);
+                    if let Some(editor) = config.editor.as_ref() {
+                        editor.to_owned()
+                    } else {
+                        anyhow::bail!("Neither env EDITOR is set, nor the `editor=` key in the config file is populated")
+                    }
                 }
-            },
-            Self::OpenWith { ref path } => path.to_owned(),
-        })
+            }
+        };
+        let abs_path = Self::resolve(program)?;
+        Ok(abs_path)
+    }
+
+    /// Resolve the file path or program name to its absolute path.
+    ///
+    /// Resolution is done by priority:
+    /// * Check if local file based on dir and executable
+    /// * Use `which::which` to resolve parentless paths.
+    fn resolve(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        // don't care if relative or absolute path
+
+        let is_basename_only = path.parent().is_none() && !path.is_absolute();
+
+        let resolved = if is_basename_only {
+            which::which(path)?
+        } else {
+            let abs = if path.is_relative() {
+                std::env::current_dir()?.join(path)
+            } else {
+                path.to_owned()
+            };
+            abs
+        };
+        log::trace!("Original program resolved to: {}", resolved.display());
+        Ok(OpenEditor(resolved))
     }
 }
 
@@ -106,13 +107,12 @@ enum Command {
         /// Pull request to review (eg. `danobi/prr/24`)
         pr: String,
 
-        /// Open the PRR file with the default XDG application
-        /// or a provided binary residing at path or that can be
-        /// looked up with `which`.
-        // TODO Currntly can't use the enum directly due to
-        // TODOO clap_derive issue <https://github.com/clap-rs/clap/issues/2621>
+        /// Open the editor instantly.
+        ///
+        /// Uses either the provided editor or falls back to the
+        /// environment variable `EDITOR`.
         #[clap(short, long)]
-        editor: Option<Option<PathBuf>>,
+        editor: Option<bool>,
     },
     /// Submit a review
     Submit {
@@ -187,9 +187,9 @@ async fn main() -> Result<()> {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             log::info!("{}", review.path().display());
-            if let Some(editor) = editor {
-                let program = ProgramPath::from(editor).path()?;
-                anyhow::bail!(std::process::Command::new(program)
+            if let Some(true) = editor {
+                let oe = OpenEditor::new(&prr.config)?;
+                anyhow::bail!(std::process::Command::new(oe.as_path())
                     .args(&[review.path()])
                     .exec());
             }

@@ -13,26 +13,33 @@ use crate::review::Review;
 const GITHUB_BASE_URL: &str = "https://api.github.com";
 
 #[derive(Debug, Deserialize)]
-struct PrrConfig {
+pub(crate) struct Config {
     /// GH personal token
-    token: String,
+    pub(crate) token: String,
+
     /// Directory to place review files
-    workdir: Option<String>,
+    pub(crate) workdir: Option<std::path::PathBuf>,
+
     /// Github URL
     ///
     /// Useful for enterprise instances with custom URLs
-    url: Option<String>,
+    pub(crate) url: Option<reqwest::Url>,
+
+    /// Editor
+    ///
+    /// Use this editor to open prr files.
+    pub(crate) editor: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Config {
-    prr: PrrConfig,
+struct PrrSection {
+    prr: Config,
 }
 
 /// Main struct that coordinates all business logic and talks to GH
 pub struct Prr {
     /// User config
-    config: Config,
+    pub(crate) config: Config,
     /// Instantiated github client
     crab: Octocrab,
 }
@@ -40,10 +47,15 @@ pub struct Prr {
 impl Prr {
     pub fn new(config_path: &Path) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
-        let config: Config = toml::from_str(&config_contents).context("Failed to parse toml")?;
+        let config: PrrSection = toml::from_str(&config_contents).context("Failed to parse toml")?;
+        let config = config.prr;
         let octocrab = Octocrab::builder()
-            .personal_token(config.prr.token.clone())
-            .base_url(config.prr.url.as_deref().unwrap_or(GITHUB_BASE_URL))
+            .personal_token(config.token.clone())
+            .base_url(config.url.clone().unwrap_or_else(|| {
+                GITHUB_BASE_URL
+                    .parse()
+                    .expect("Static gh url parses just fine")
+            }))
             .context("Failed to parse github base URL")?
             .build()
             .context("Failed to create GH client")?;
@@ -55,13 +67,13 @@ impl Prr {
     }
 
     fn workdir(&self) -> Result<PathBuf> {
-        match &self.config.prr.workdir {
+        match &self.config.workdir {
             Some(d) => {
-                if d.starts_with('~') {
+                if d.to_string_lossy().starts_with('~') {
                     bail!("Workdir may not use '~' to denote home directory");
                 }
 
-                Ok(Path::new(d).to_path_buf())
+                Ok(d.clone())
             }
             None => {
                 let xdg_dirs = xdg::BaseDirectories::with_prefix("prr")?;
