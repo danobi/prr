@@ -47,7 +47,8 @@ pub struct Prr {
 impl Prr {
     pub fn new(config_path: &Path) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
-        let config: PrrSection = toml::from_str(&config_contents).context("Failed to parse toml")?;
+        let config: PrrSection =
+            toml::from_str(&config_contents).context("Failed to parse toml")?;
         let config = config.prr;
         let octocrab = Octocrab::builder()
             .personal_token(config.token.clone())
