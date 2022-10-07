@@ -315,7 +315,7 @@ impl Review {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{create_dir_all, File};
+    use fs::{create_dir_all, File};
     use tempfile::{tempdir, TempDir};
 
     fn setup(review: &str, metadata: &str) -> (Review, TempDir) {
