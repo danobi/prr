@@ -100,19 +100,19 @@ impl OpenEditor {
 enum Command {
     /// Get a pull request and begin a review
     Get {
+        /// Pull request to review (eg. `danobi/prr/24`)
+        pr: String,
+
         /// Ignore unsubmitted review checks
         #[clap(short, long)]
         force: bool,
-
-        /// Pull request to review (eg. `danobi/prr/24`)
-        pr: String,
 
         /// Open the editor instantly.
         ///
         /// Uses either the provided editor or falls back to the
         /// environment variable `EDITOR`.
         #[clap(short, long)]
-        editor: Option<bool>,
+        editor: bool,
     },
     /// Submit a review
     Submit {
@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             log::info!("{}", review.path().display());
-            if let Some(true) = editor {
+            if editor {
                 let oe = OpenEditor::new(&prr.config)?;
                 anyhow::bail!(std::process::Command::new(oe.as_path())
                     .args(&[review.path()])
@@ -201,4 +201,17 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn args_get_force_w_editor() {
+        let _args =
+            Args::try_parse_from("prr -vvv --config baz.toml get -f -e foo/bar/123".split(' '))
+                .unwrap();
+        dbg!(_args);
+    }
 }
