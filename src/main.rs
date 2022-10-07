@@ -80,7 +80,11 @@ impl OpenEditor {
         log::trace!("Original program path or name is: {}", path.display());
 
         // don't care if relative or absolute path
-        let is_basename_only = dbg!(path.parent()).is_none() && !path.is_absolute();
+        let is_basename_only = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .is_none()
+            && !path.is_absolute();
 
         let resolved = if is_basename_only {
             log::trace!(
