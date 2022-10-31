@@ -192,7 +192,7 @@ impl Prr {
         }
     }
 
-    pub async fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
+    pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let metadata = review
             .get_metadata()

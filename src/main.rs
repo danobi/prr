@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
         }
         Command::Apply { pr } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
-            prr.apply_pr(&owner, &repo, pr_num).await?;
+            prr.apply_pr(&owner, &repo, pr_num)?;
         }
     }
 
