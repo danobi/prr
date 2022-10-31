@@ -47,6 +47,12 @@ enum Command {
     ///
     /// This can be useful for building/testing PRs
     Apply { pr: String },
+    /// Print a status summary of all known reviews
+    Status {
+        /// Hide column titles from output
+        #[clap(short, long)]
+        no_titles: bool,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -112,6 +118,9 @@ async fn main() -> Result<()> {
         Command::Apply { pr } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             prr.apply_pr(&owner, &repo, pr_num)?;
+        }
+        Command::Status { no_titles } => {
+            prr.print_status(no_titles)?;
         }
     }
 

@@ -12,6 +12,7 @@ clap = { version = "3.1", features = ["derive"] }
 git2 = "0.15.0"
 lazy_static = "1.4"
 octocrab = "0.15"
+prettytable-rs = "0.9.0"
 regex = "1.5"
 reqwest = "0.11"
 serde = "1.0"

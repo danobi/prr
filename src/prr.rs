@@ -4,12 +4,13 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use git2::{ApplyLocation, Diff, Repository, StatusOptions};
 use octocrab::Octocrab;
+use prettytable::{format, row, Table};
 use reqwest::StatusCode;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
 use crate::parser::{LineLocation, ReviewAction};
-use crate::review::Review;
+use crate::review::{get_all_existing, Review};
 
 const GITHUB_BASE_URL: &str = "https://api.github.com";
 
@@ -213,5 +214,43 @@ impl Prr {
 
         repo.apply(&diff, ApplyLocation::WorkDir, None)
             .context("Failed to apply diff")
+    }
+
+    pub fn print_status(&self, no_titles: bool) -> Result<()> {
+        let mut table = Table::new();
+        let mut table_fmt = *format::consts::FORMAT_CLEAN;
+        // Get rid of leading padding on each line
+        table_fmt.padding(0, 2);
+        table.set_format(table_fmt);
+        if !no_titles {
+            table.set_titles(row!["Handle", "Status", "Review file"])
+        }
+
+        let reviews =
+            get_all_existing(&self.workdir()?).context("Failed to get existing reviews")?;
+
+        for review in reviews {
+            let metadata = review.get_metadata()?;
+            let reviewed = {
+                let (_, review_comment, comments) = review.comments().with_context(|| {
+                    format!("Failed to parse comments for {}", review.path().display())
+                })?;
+
+                !review_comment.is_empty() || !comments.is_empty()
+            };
+            let status = if metadata.submitted().is_some() {
+                "SUBMITTED"
+            } else if reviewed {
+                "REVIEWED"
+            } else {
+                "NEW"
+            };
+
+            table.add_row(row![review.handle(), status, review.path().display()]);
+        }
+
+        table.printstd();
+
+        Ok(())
     }
 }

@@ -43,6 +43,11 @@ impl ReviewMetadata {
     pub fn original(&self) -> &str {
         &self.original
     }
+
+    /// Returns last submitted time, if any
+    pub fn submitted(&self) -> Option<u64> {
+        self.submitted
+    }
 }
 
 fn prefix_lines(s: &str, prefix: &str) -> String {
@@ -58,6 +63,60 @@ fn prefix_lines(s: &str, prefix: &str) -> String {
     }
 
     ret
+}
+
+/// Returns a list of all reviews in a workdir
+pub fn get_all_existing(workdir: &Path) -> Result<Vec<Review>> {
+    // This pipeline does the following:
+    //   * Iterate through all org directories in workdir
+    //   * For each org directory, iterate through all contained repo directories
+    //   * For each repo directory, enumerate all non-metadata review files
+    let reviews: Vec<PathBuf> = fs::read_dir(workdir)
+        .context("Failed to read workdir")?
+        .filter_map(|entry| entry.ok())
+        .map(|org| org.path())
+        .filter(|org| org.is_dir())
+        .filter_map(|org| fs::read_dir(org).ok())
+        .flatten()
+        .filter_map(|repo| repo.ok())
+        .map(|repo| repo.path())
+        .filter(|repo| repo.is_dir())
+        .filter_map(|repo| fs::read_dir(repo).ok())
+        .flatten()
+        .filter_map(|review| review.ok())
+        .map(|review| review.path())
+        .filter(|review| review.is_file())
+        .filter(|review| match review.extension() {
+            Some(e) => e == "prr",
+            None => false,
+        })
+        .collect();
+
+    let mut ret = Vec::with_capacity(reviews.len());
+    for review in reviews {
+        let parts: Vec<_> = review
+            .iter()
+            .rev()
+            .take(3)
+            .map(|p| p.to_string_lossy())
+            .collect();
+
+        if parts.len() != 3 {
+            bail!("malformed review file path: {}", review.display());
+        }
+
+        let pr_num: u64 = parts[0]
+            .strip_suffix(".prr")
+            .unwrap_or(&parts[0])
+            .parse()
+            .with_context(|| format!("Failed to parse PR num: {}", review.display()))?;
+
+        // Note the vec has components reversed
+        let r = Review::new_existing(workdir, &parts[2], &parts[1], pr_num);
+        ret.push(r);
+    }
+
+    Ok(ret)
 }
 
 impl Review {
@@ -314,6 +373,11 @@ impl Review {
         metadata_path.set_file_name(format!(".{}", self.pr_num));
 
         metadata_path
+    }
+
+    /// Returns a handle (eg "owner/repo/pr_num") to this review
+    pub fn handle(&self) -> String {
+        format!("{}/{}/{}", self.owner, self.repo, self.pr_num)
     }
 }
 
