@@ -43,6 +43,10 @@ enum Command {
         #[clap(short, long)]
         debug: bool,
     },
+    /// Apply a pull request to the working directory
+    ///
+    /// This can be useful for building/testing PRs
+    Apply { pr: String },
 }
 
 #[derive(Parser, Debug)]
@@ -104,6 +108,10 @@ async fn main() -> Result<()> {
         Command::Submit { pr, debug } => {
             let (owner, repo, pr_num) = parse_pr_str(&pr)?;
             prr.submit_pr(&owner, &repo, pr_num, debug).await?;
+        }
+        Command::Apply { pr } => {
+            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            prr.apply_pr(&owner, &repo, pr_num).await?;
         }
     }
 

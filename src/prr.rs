@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
+use git2::{ApplyLocation, Diff, Repository, StatusOptions};
 use octocrab::Octocrab;
 use reqwest::StatusCode;
 use serde_derive::Deserialize;
@@ -189,5 +190,28 @@ impl Prr {
             }
             Err(e) => bail!("Error during POST: {}", e),
         }
+    }
+
+    pub async fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
+        let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
+        let metadata = review
+            .get_metadata()
+            .context("Failed to get review metadata")?;
+        let raw = metadata.original();
+        let diff = Diff::from_buffer(raw.as_bytes()).context("Failed to load original diff")?;
+        let repo = Repository::open_from_env().context("Failed to open git repository")?;
+
+        // Best effort check to prevent clobbering any work in progress
+        let mut status_opts = StatusOptions::new();
+        status_opts.include_untracked(true);
+        let statuses = repo
+            .statuses(Some(&mut status_opts))
+            .context("Failed to get repo status")?;
+        if !statuses.is_empty() {
+            bail!("Working directory is dirty");
+        }
+
+        repo.apply(&diff, ApplyLocation::WorkDir, None)
+            .context("Failed to apply diff")
     }
 }

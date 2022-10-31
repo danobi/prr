@@ -38,6 +38,11 @@ impl ReviewMetadata {
     pub fn commit_id(&self) -> Option<&str> {
         self.commit_id.as_deref()
     }
+
+    /// Returns the original, raw diff of the review
+    pub fn original(&self) -> &str {
+        &self.original
+    }
 }
 
 fn prefix_lines(s: &str, prefix: &str) -> String {
