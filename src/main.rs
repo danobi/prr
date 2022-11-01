@@ -53,6 +53,14 @@ enum Command {
         #[clap(short, long)]
         no_titles: bool,
     },
+    /// Remove a review
+    Remove {
+        /// Ignore unsubmitted review checks
+        #[clap(short, long)]
+        force: bool,
+        /// Pull request to review (eg. `danobi/prr/24`)
+        pr: String,
+    },
 }
 
 #[derive(Parser, Debug)]
@@ -121,6 +129,11 @@ async fn main() -> Result<()> {
         }
         Command::Status { no_titles } => {
             prr.print_status(no_titles)?;
+        }
+        Command::Remove { pr, force } => {
+            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
+            review.remove(force)?;
         }
     }
 

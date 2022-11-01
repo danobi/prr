@@ -379,6 +379,25 @@ impl Review {
     pub fn handle(&self) -> String {
         format!("{}/{}/{}", self.owner, self.repo, self.pr_num)
     }
+
+    /// Remove review from filesystem
+    pub fn remove(self, force: bool) -> Result<()> {
+        if !force
+            && self
+                .unsubmitted()
+                .context("Failed to check for unsubmitted review")?
+        {
+            bail!(
+                "You have unsubmitted changes to the requested review. \
+                Re-run this command with --force to ignore this check."
+            );
+        }
+
+        fs::remove_file(self.path()).context("Failed to remove review file")?;
+        fs::remove_file(self.metadata_path()).context("Failed to remove metadata file")?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
