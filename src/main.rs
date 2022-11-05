@@ -1,30 +1,13 @@
 use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use lazy_static::lazy_static;
-use regex::{Captures, Regex};
 
 mod parser;
 mod prr;
 mod review;
 
 use prr::Prr;
-
-// Use lazy static to ensure regex is only compiled once
-lazy_static! {
-    // Regex for short input. Example:
-    //
-    //      danobi/prr-test-repo/6
-    //
-    static ref SHORT: Regex = Regex::new(r"^(?P<org>[\w\-_]+)/(?P<repo>[\w\-_]+)/(?P<pr_num>\d+)").unwrap();
-
-    // Regex for url input. Url looks something like:
-    //
-    //      https://github.com/danobi/prr-test-repo/pull/6
-    //
-    static ref URL: Regex = Regex::new(r".*github\.com/(?P<org>.+)/(?P<repo>.+)/pull/(?P<pr_num>\d+)").unwrap();
-}
 
 #[derive(Subcommand, Debug)]
 enum Command {
@@ -73,31 +56,6 @@ struct Args {
     command: Command,
 }
 
-/// Parses a PR string in the form of `danobi/prr/24` and returns
-/// a tuple ("danobi", "prr", 24) or an error if string is malformed
-fn parse_pr_str<'a>(s: &'a str) -> Result<(String, String, u64)> {
-    let f = |captures: Captures<'a>| -> Result<(String, String, u64)> {
-        let owner = captures.name("org").unwrap().as_str().to_owned();
-        let repo = captures.name("repo").unwrap().as_str().to_owned();
-        let pr_nr: u64 = captures
-            .name("pr_num")
-            .unwrap()
-            .as_str()
-            .parse()
-            .context("Failed to parse pr number")?;
-
-        Ok((owner, repo, pr_nr))
-    };
-
-    if let Some(captures) = SHORT.captures(s) {
-        f(captures)
-    } else if let Some(captures) = URL.captures(s) {
-        f(captures)
-    } else {
-        bail!("Invalid PR ref format")
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -115,23 +73,23 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Get { pr, force } => {
-            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             println!("{}", review.path().display());
         }
         Command::Submit { pr, debug } => {
-            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
             prr.submit_pr(&owner, &repo, pr_num, debug).await?;
         }
         Command::Apply { pr } => {
-            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
             prr.apply_pr(&owner, &repo, pr_num)?;
         }
         Command::Status { no_titles } => {
             prr.print_status(no_titles)?;
         }
         Command::Remove { pr, force } => {
-            let (owner, repo, pr_num) = parse_pr_str(&pr)?;
+            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             review.remove(force)?;
         }

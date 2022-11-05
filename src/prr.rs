@@ -1,3 +1,5 @@
+use lazy_static::lazy_static;
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -11,8 +13,27 @@ use serde_json::{json, Value};
 
 use crate::parser::{LineLocation, ReviewAction};
 use crate::review::{get_all_existing, Review};
+use regex::{Captures, Regex};
+
+// Use lazy static to ensure regex is only compiled once
+lazy_static! {
+    // Regex for short input. Example:
+    //
+    //      danobi/prr-test-repo/6
+    //
+    static ref SHORT: Regex = Regex::new(r"^(?P<org>[\w\-_]+)/(?P<repo>[\w\-_]+)/(?P<pr_num>\d+)").unwrap();
+
+    // Regex for url input. Url looks something like:
+    //
+    //      https://github.com/danobi/prr-test-repo/pull/6
+    //
+    static ref URL: Regex = Regex::new(r".*github\.com/(?P<org>.+)/(?P<repo>.+)/pull/(?P<pr_num>\d+)").unwrap();
+}
 
 const GITHUB_BASE_URL: &str = "https://api.github.com";
+
+/// The name of the local configuration file
+pub const CONFIG_RC_FILE_NAME: &str = ".prrc";
 
 #[derive(Debug, Deserialize)]
 struct PrrConfig {
@@ -27,6 +48,12 @@ struct PrrConfig {
 }
 
 #[derive(Debug, Deserialize)]
+struct PrrLocalConfig {
+    /// Default url for this current project
+    repository: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct Config {
     prr: PrrConfig,
 }
@@ -37,6 +64,23 @@ pub struct Prr {
     config: Config,
     /// Instantiated github client
     crab: Octocrab,
+    /// Local config
+    local: Option<PrrLocalConfig>,
+}
+
+/// Returns if exists the config file for the current project
+fn find_project_config_file() -> Option<PathBuf> {
+    env::current_dir().ok().and_then(|mut path| loop {
+        path.push(CONFIG_RC_FILE_NAME);
+        if path.exists() {
+            return Some(path);
+        }
+
+        path.pop();
+        if !path.pop() {
+            return None;
+        }
+    })
 }
 
 impl Prr {
@@ -50,8 +94,21 @@ impl Prr {
             .build()
             .context("Failed to create GH client")?;
 
+        let local_config: Option<PrrLocalConfig> =
+            if let Some(project_config_path) = find_project_config_file() {
+                let config_contents = fs::read_to_string(project_config_path)
+                    .context("Failed to local read config")?;
+                let config: PrrLocalConfig = toml::from_str(&config_contents)
+                    .context("Failed to parse toml for local config")?;
+
+                Some(config)
+            } else {
+                None
+            };
+
         Ok(Prr {
             config,
+            local: local_config,
             crab: octocrab,
         })
     }
@@ -69,6 +126,44 @@ impl Prr {
                 let xdg_dirs = xdg::BaseDirectories::with_prefix("prr")?;
                 Ok(xdg_dirs.get_data_home())
             }
+        }
+    }
+
+    /// Parses a PR string in the form of `danobi/prr/24` and returns
+    /// a tuple ("danobi", "prr", 24) or an error if string is malformed.
+    /// If the local repository config is defined, it just needs the PR number.
+    pub fn parse_pr_str(&self, s: &str) -> Result<(String, String, u64)> {
+        let f = |captures: Captures| -> Result<(String, String, u64)> {
+            let owner = captures.name("org").unwrap().as_str().to_owned();
+            let repo = captures.name("repo").unwrap().as_str().to_owned();
+            let pr_nr: u64 = captures
+                .name("pr_num")
+                .unwrap()
+                .as_str()
+                .parse()
+                .context("Failed to parse pr number")?;
+
+            Ok((owner, repo, pr_nr))
+        };
+
+        let repo = if self.local.is_some() {
+            let url = self.local.as_ref().unwrap().repository.clone();
+
+            if url.ends_with('/') {
+                format!("{}{}", url, s)
+            } else {
+                format!("{}/{}", url, s)
+            }
+        } else {
+            s.to_string()
+        };
+
+        if let Some(captures) = SHORT.captures(&repo) {
+            f(captures)
+        } else if let Some(captures) = URL.captures(&repo) {
+            f(captures)
+        } else {
+            bail!("Invalid PR ref format")
         }
     }
 
