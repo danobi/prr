@@ -50,12 +50,13 @@ struct PrrConfig {
 #[derive(Debug, Deserialize)]
 struct PrrLocalConfig {
     /// Default url for this current project
-    repository: String,
+    repository: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Config {
     prr: PrrConfig,
+    local: Option<PrrLocalConfig>,
 }
 
 /// Main struct that coordinates all business logic and talks to GH
@@ -64,8 +65,6 @@ pub struct Prr {
     config: Config,
     /// Instantiated github client
     crab: Octocrab,
-    /// Local config
-    local: Option<PrrLocalConfig>,
 }
 
 /// Returns if exists the config file for the current project
@@ -84,9 +83,37 @@ fn find_project_config_file() -> Option<PathBuf> {
 }
 
 impl Prr {
+    /// Create a new Prr object using the main config and/or the local config.
+    /// If a local config has the `[prr]` section use this one instead of the main config.
+    /// If `[prr]` section is not defined merge the local config with the main local.
+    /// If local config file does not exist, use only the main config.
+    ///
+    /// A `[prr]` redefition must be complete; if not, panics with a
+    /// `redefinition of table `prr` for key `prr` at ...`
     pub fn new(config_path: &Path) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
-        let config: Config = toml::from_str(&config_contents).context("Failed to parse toml")?;
+        let local_config_contents = if let Some(project_config_path) = find_project_config_file() {
+            let content =
+                fs::read_to_string(project_config_path).context("Failed to read local config")?;
+
+            content
+        } else {
+            String::new()
+        };
+
+        let override_config = toml::from_str::<Config>(&local_config_contents);
+
+        let config: Config = match override_config {
+            // If `override_config` does not raise an error, use this one as config.
+            Ok(config) => config,
+            // Else merge the two config contents.
+            Err(_) => {
+                let contents = format!("{}\n{}", config_contents, local_config_contents);
+
+                toml::from_str::<Config>(&contents)?
+            }
+        };
+
         let octocrab = Octocrab::builder()
             .personal_token(config.prr.token.clone())
             .base_url(config.prr.url.as_deref().unwrap_or(GITHUB_BASE_URL))
@@ -94,21 +121,8 @@ impl Prr {
             .build()
             .context("Failed to create GH client")?;
 
-        let local_config: Option<PrrLocalConfig> =
-            if let Some(project_config_path) = find_project_config_file() {
-                let config_contents = fs::read_to_string(project_config_path)
-                    .context("Failed to local read config")?;
-                let config: PrrLocalConfig = toml::from_str(&config_contents)
-                    .context("Failed to parse toml for local config")?;
-
-                Some(config)
-            } else {
-                None
-            };
-
         Ok(Prr {
             config,
-            local: local_config,
             crab: octocrab,
         })
     }
@@ -146,13 +160,15 @@ impl Prr {
             Ok((owner, repo, pr_nr))
         };
 
-        let repo = if let Some(local_config) = &self.local {
-            let url = local_config.repository.clone();
-
-            if url.ends_with('/') {
-                format!("{}{}", url, s)
+        let repo = if let Some(local_config) = &self.config.local {
+            if let Some(url) = &local_config.repository {
+                if url.ends_with('/') {
+                    format!("{}{}", url, s)
+                } else {
+                    format!("{}/{}", url, s)
+                }
             } else {
-                format!("{}/{}", url, s)
+                s.to_string()
             }
         } else {
             s.to_string()
