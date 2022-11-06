@@ -146,8 +146,8 @@ impl Prr {
             Ok((owner, repo, pr_nr))
         };
 
-        let repo = if self.local.is_some() {
-            let url = self.local.as_ref().unwrap().repository.clone();
+        let repo = if let Some(local_config) = &self.local {
+            let url = local_config.repository.clone();
 
             if url.ends_with('/') {
                 format!("{}{}", url, s)
