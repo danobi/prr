@@ -1,3 +1,4 @@
+use std::env;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -8,6 +9,9 @@ mod prr;
 mod review;
 
 use prr::Prr;
+
+/// The name of the local configuration file
+pub const LOCAL_CONFIG_FILE_NAME: &str = ".prr.toml";
 
 #[derive(Subcommand, Debug)]
 enum Command {
@@ -56,6 +60,21 @@ struct Args {
     command: Command,
 }
 
+/// Returns if exists the config file for the current project
+fn find_project_config_file() -> Option<PathBuf> {
+    env::current_dir().ok().and_then(|mut path| loop {
+        path.push(LOCAL_CONFIG_FILE_NAME);
+        if path.exists() {
+            return Some(path);
+        }
+
+        path.pop();
+        if !path.pop() {
+            return None;
+        }
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -69,7 +88,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let prr = Prr::new(&config_path)?;
+    let prr = Prr::new(&config_path, find_project_config_file())?;
 
     match args.command {
         Command::Get { pr, force } => {

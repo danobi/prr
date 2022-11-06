@@ -1,5 +1,4 @@
 use lazy_static::lazy_static;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -31,9 +30,6 @@ lazy_static! {
 }
 
 const GITHUB_BASE_URL: &str = "https://api.github.com";
-
-/// The name of the local configuration file
-pub const LOCAL_CONFIG_FILE_NAME: &str = ".prr.toml";
 
 #[derive(Debug, Deserialize)]
 struct PrrConfig {
@@ -67,21 +63,6 @@ pub struct Prr {
     crab: Octocrab,
 }
 
-/// Returns if exists the config file for the current project
-fn find_project_config_file() -> Option<PathBuf> {
-    env::current_dir().ok().and_then(|mut path| loop {
-        path.push(LOCAL_CONFIG_FILE_NAME);
-        if path.exists() {
-            return Some(path);
-        }
-
-        path.pop();
-        if !path.pop() {
-            return None;
-        }
-    })
-}
-
 impl Prr {
     /// Create a new Prr object using the main config and/or the local config.
     /// If a local config has the `[prr]` section use this one instead of the main config.
@@ -90,9 +71,9 @@ impl Prr {
     ///
     /// A `[prr]` redefition must be complete; if not, panics with a
     /// `redefinition of table `prr` for key `prr` at ...`
-    pub fn new(config_path: &Path) -> Result<Prr> {
+    pub fn new(config_path: &Path, local_config_path: Option<PathBuf>) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
-        let local_config_contents = if let Some(project_config_path) = find_project_config_file() {
+        let local_config_contents = if let Some(project_config_path) = local_config_path {
             let content =
                 fs::read_to_string(project_config_path).context("Failed to read local config")?;
 
