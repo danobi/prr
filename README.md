@@ -118,15 +118,35 @@ highlighted in different colors.
 
 ### Config
 
-`prr` supports various configuration options. The config file must be located
-at `$XDG_CONFIG_HOME/prr/config.toml`. This typically expands to
-`$HOME/.config/prr/config.toml`.
+`prr` supports various configuration options spread over one or more config
+files. The global config file must be located at `$XDG_CONFIG_HOME/prr/config.toml`.
+This typically expands to `$HOME/.config/prr/config.toml`.
+
+`prr` also supports local config files. Local config files must be named
+`.prr.toml` and will be searched for starting from the current working
+directory up every parent directory until either the first match or the root
+directory is hit. Local config files override values in the global config.
+Table specific semantics are documented below.
 
 #### [prr]
 
-The `[prr]` table controls installation wide settings. Currently this is the
-only table.
+The `[prr]` table controls installation wide settings.
 
 * `prr.token`: Personal authentication token (required)
 * `prr.workdir`: Directory to place review files (optional)
 * `prr.url`: URL to github API (optional)
+
+If this table is specified in a local config file, it must be fully specified
+and will override the global config file.
+
+#### [local]
+
+The `[local]` table contains configuration local to a directory and its
+sub-directories.
+
+* `local.repository`: A string in format of `${ORG}/${REPO}` (optional)
+    * If specified, you may omit the `${ORG}/${REPO}` from PR string arguments.
+      For example, you may run `prr get 6` instead of `prr get danobi/prr/6`.
+
+This table may not be specified in both a local config file and the global
+config file.
