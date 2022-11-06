@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -11,6 +12,22 @@ use serde_json::{json, Value};
 
 use crate::parser::{LineLocation, ReviewAction};
 use crate::review::{get_all_existing, Review};
+use regex::{Captures, Regex};
+
+// Use lazy static to ensure regex is only compiled once
+lazy_static! {
+    // Regex for short input. Example:
+    //
+    //      danobi/prr-test-repo/6
+    //
+    static ref SHORT: Regex = Regex::new(r"^(?P<org>[\w\-_]+)/(?P<repo>[\w\-_]+)/(?P<pr_num>\d+)").unwrap();
+
+    // Regex for url input. Url looks something like:
+    //
+    //      https://github.com/danobi/prr-test-repo/pull/6
+    //
+    static ref URL: Regex = Regex::new(r".*github\.com/(?P<org>.+)/(?P<repo>.+)/pull/(?P<pr_num>\d+)").unwrap();
+}
 
 const GITHUB_BASE_URL: &str = "https://api.github.com";
 
@@ -27,8 +44,15 @@ struct PrrConfig {
 }
 
 #[derive(Debug, Deserialize)]
+struct PrrLocalConfig {
+    /// Default url for this current project
+    repository: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct Config {
     prr: PrrConfig,
+    local: Option<PrrLocalConfig>,
 }
 
 /// Main struct that coordinates all business logic and talks to GH
@@ -40,9 +64,37 @@ pub struct Prr {
 }
 
 impl Prr {
-    pub fn new(config_path: &Path) -> Result<Prr> {
+    /// Create a new Prr object using the main config and/or the local config.
+    /// If a local config has the `[prr]` section use this one instead of the main config.
+    /// If `[prr]` section is not defined merge the local config with the main local.
+    /// If local config file does not exist, use only the main config.
+    ///
+    /// A `[prr]` redefition must be complete; if not, panics with a
+    /// `redefinition of table `prr` for key `prr` at ...`
+    pub fn new(config_path: &Path, local_config_path: Option<PathBuf>) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
-        let config: Config = toml::from_str(&config_contents).context("Failed to parse toml")?;
+        let local_config_contents = if let Some(project_config_path) = local_config_path {
+            let content =
+                fs::read_to_string(project_config_path).context("Failed to read local config")?;
+
+            content
+        } else {
+            String::new()
+        };
+
+        let override_config = toml::from_str::<Config>(&local_config_contents);
+
+        let config: Config = match override_config {
+            // If `override_config` does not raise an error, use this one as config.
+            Ok(config) => config,
+            // Else merge the two config contents.
+            Err(_) => {
+                let contents = format!("{}\n{}", config_contents, local_config_contents);
+
+                toml::from_str::<Config>(&contents)?
+            }
+        };
+
         let octocrab = Octocrab::builder()
             .personal_token(config.prr.token.clone())
             .base_url(config.prr.url.as_deref().unwrap_or(GITHUB_BASE_URL))
@@ -69,6 +121,46 @@ impl Prr {
                 let xdg_dirs = xdg::BaseDirectories::with_prefix("prr")?;
                 Ok(xdg_dirs.get_data_home())
             }
+        }
+    }
+
+    /// Parses a PR string in the form of `danobi/prr/24` and returns
+    /// a tuple ("danobi", "prr", 24) or an error if string is malformed.
+    /// If the local repository config is defined, it just needs the PR number.
+    pub fn parse_pr_str(&self, s: &str) -> Result<(String, String, u64)> {
+        let f = |captures: Captures| -> Result<(String, String, u64)> {
+            let owner = captures.name("org").unwrap().as_str().to_owned();
+            let repo = captures.name("repo").unwrap().as_str().to_owned();
+            let pr_nr: u64 = captures
+                .name("pr_num")
+                .unwrap()
+                .as_str()
+                .parse()
+                .context("Failed to parse pr number")?;
+
+            Ok((owner, repo, pr_nr))
+        };
+
+        let repo = if let Some(local_config) = &self.config.local {
+            if let Some(url) = &local_config.repository {
+                if url.ends_with('/') {
+                    format!("{}{}", url, s)
+                } else {
+                    format!("{}/{}", url, s)
+                }
+            } else {
+                s.to_string()
+            }
+        } else {
+            s.to_string()
+        };
+
+        if let Some(captures) = SHORT.captures(&repo) {
+            f(captures)
+        } else if let Some(captures) = URL.captures(&repo) {
+            f(captures)
+        } else {
+            bail!("Invalid PR ref format")
         }
     }
 
