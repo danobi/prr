@@ -74,10 +74,7 @@ impl Prr {
     pub fn new(config_path: &Path, local_config_path: Option<PathBuf>) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
         let local_config_contents = if let Some(project_config_path) = local_config_path {
-            let content =
-                fs::read_to_string(project_config_path).context("Failed to read local config")?;
-
-            content
+            fs::read_to_string(project_config_path).context("Failed to read local config")?
         } else {
             String::new()
         };

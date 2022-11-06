@@ -456,7 +456,7 @@ mod tests {
         let mut parser = ReviewParser::new();
 
         for line in input.lines() {
-            if let Err(_) = parser.parse_line(line) {
+            if parser.parse_line(line).is_err() {
                 return;
             }
         }
