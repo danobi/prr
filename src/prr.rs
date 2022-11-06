@@ -33,7 +33,7 @@ lazy_static! {
 const GITHUB_BASE_URL: &str = "https://api.github.com";
 
 /// The name of the local configuration file
-pub const CONFIG_RC_FILE_NAME: &str = ".prrc";
+pub const LOCAL_CONFIG_FILE_NAME: &str = ".prr.toml";
 
 #[derive(Debug, Deserialize)]
 struct PrrConfig {
@@ -71,7 +71,7 @@ pub struct Prr {
 /// Returns if exists the config file for the current project
 fn find_project_config_file() -> Option<PathBuf> {
     env::current_dir().ok().and_then(|mut path| loop {
-        path.push(CONFIG_RC_FILE_NAME);
+        path.push(LOCAL_CONFIG_FILE_NAME);
         if path.exists() {
             return Some(path);
         }
