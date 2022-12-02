@@ -22,3 +22,6 @@ tempfile = "3.3.0"
 tokio = { version = "1.17", default-features = false, features = ["macros", "rt-multi-thread"] }
 toml = "0.5"
 xdg = "2.4"
+
+[dev-dependencies]
+tempdir = "0.3.0"
