@@ -146,7 +146,7 @@ impl Review {
         let review_dir = review_path
             .parent()
             .ok_or_else(|| anyhow!("Review path has no parent!"))?;
-        fs::create_dir_all(&review_dir).context("Failed to create workdir directories")?;
+        fs::create_dir_all(review_dir).context("Failed to create workdir directories")?;
 
         // Check if there are unsubmitted changes
         if !force
@@ -185,7 +185,7 @@ impl Review {
             .write(true)
             .create(true)
             .truncate(true)
-            .open(&metadata_path)
+            .open(metadata_path)
             .context("Failed to create metadata file")?;
         metadata_file
             .write_all(json.as_bytes())
@@ -263,7 +263,7 @@ impl Review {
             .write(true)
             .create(true)
             .truncate(true)
-            .open(&metadata_path)
+            .open(metadata_path)
             .context("Failed to create metadata file")?;
         metadata_file
             .write_all(json.as_bytes())
