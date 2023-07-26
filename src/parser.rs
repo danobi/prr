@@ -268,6 +268,13 @@ impl ReviewParser {
                     );
                 }
 
+                if is_diff_header(line) {
+                    self.state = State::FilePreamble(FilePreambleState {
+                        file: parse_diff_header(line)?,
+                    });
+                    return Ok(None);
+                }
+
                 if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)? {
                     // Subtract 1 b/c this line is before the actual diff hunk
                     left_start = left_start.saturating_sub(1);
@@ -655,6 +662,19 @@ mod tests {
             line: LineLocation::Left(58),
             start_line: Some(LineLocation::Left(1)),
             comment: "Comment 1".to_string(),
+        })];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn empty_file() {
+        let input = include_str!("../testdata/empty_file");
+        let expected = vec![Comment::Inline(InlineComment {
+            file: "libbpf-cargo/src/test.rs".to_string(),
+            line: LineLocation::Right(2159),
+            start_line: None,
+            comment: "Comment".to_string(),
         })];
 
         test(input, &expected);
