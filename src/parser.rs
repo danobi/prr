@@ -8,7 +8,7 @@ lazy_static! {
     //
     //      `@@ -731,7 +731,7 @@[...]`
     //
-    static ref HUNK_START: Regex = Regex::new(r"^@@ -(?P<lstart>\d+),(?P<llen>\d+) \+(?:(?P<rstart>\d+),)?(?P<rlen>\d+) @@").unwrap();
+    static ref HUNK_START: Regex = Regex::new(r"^@@ -(?P<lstart>\d+)(?:,(?P<llen>\d+))? \+(?P<rstart>\d+)(?:,(?P<rlen>\d+))? @@").unwrap();
     // Regex for start of a file diff. The start of a file diff should look like:
     //
     //      `diff --git a/ch1.txt b/ch1.txt`
@@ -742,8 +742,8 @@ mod tests {
         let captures = HUNK_START
             .captures("@@ -0,0 +1 @@")
             .expect("Must match regex.");
-        assert!(captures.name("rstart").is_none());
-        assert_eq!(captures.name("rlen").unwrap().as_str(), "1");
+        assert_eq!(captures.name("rstart").unwrap().as_str(), "1");
+        assert!(captures.name("rlen").is_none());
         assert_eq!(captures.name("lstart").unwrap().as_str(), "0");
         assert_eq!(captures.name("llen").unwrap().as_str(), "0");
     }
@@ -757,5 +757,16 @@ mod tests {
         assert_eq!(captures.name("rlen").unwrap().as_str(), "1");
         assert_eq!(captures.name("lstart").unwrap().as_str(), "0");
         assert_eq!(captures.name("llen").unwrap().as_str(), "7");
+    }
+
+    #[test]
+    fn hunk_only_one_line_on_each_side() {
+        let captures = HUNK_START
+            .captures("@@ -5 +5 @@")
+            .expect("Must match regex.");
+        assert_eq!(captures.name("rstart").unwrap().as_str(), "5");
+        assert!(captures.name("rlen").is_none());
+        assert_eq!(captures.name("lstart").unwrap().as_str(), "5");
+        assert!(captures.name("llen").is_none());
     }
 }
