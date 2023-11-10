@@ -110,11 +110,21 @@ Syntax: `@prr approve`, `@prr reject`, or `@prr comment`.
 
 ### Vim integration
 
-"Vim integration" is a bit overselling it, but I've created some `ftdetect`
-and `syntax` configs to enable syntax highlighting for `prr` review files.
+`vim/` directory contains Vim plugin providing syntax coloring, filetype
+detection and folding configuration for `*.prr` files.
 
-It can be pretty hard to look at a diff without having deletes and additions
-highlighted in different colors.
+To install it modify `&runtimepath` to add this directory or use plugin manager
+of your choice to add this plugin.
+
+#### Folding
+
+With default Vim configuration all folds will be closed by default, so if you
+want them to be opened then you need to do one of these:
+
+- Add `set foldlevel=9999` in your Vim config to open all folds by default
+- Add `set nofoldenable` to disable folding
+
+Consult `:h folding` for more details.
 
 ### Config
 
