@@ -54,7 +54,7 @@ enum Command {
 #[clap(version)]
 struct Args {
     /// Path to config file
-    #[clap(long, parse(from_os_str))]
+    #[clap(long)]
     config: Option<PathBuf>,
     #[clap(subcommand)]
     command: Command,
