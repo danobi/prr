@@ -116,6 +116,17 @@ detection and folding configuration for `*.prr` files.
 To install it modify `&runtimepath` to add this directory or use plugin manager
 of your choice to add this plugin.
 
+#### Vundle installation
+
+```
+Plugin 'danobi/prr', {'rtp': 'vim/'}
+```
+
+#### Manual installation
+
+Copy the provided `*.vim` files into their appropriate subdirectories in
+`~/.vim`.
+
 #### Folding
 
 With default Vim configuration all folds will be closed by default, so if you
