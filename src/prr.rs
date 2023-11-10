@@ -198,7 +198,10 @@ impl Prr {
         let (review_action, review_comment, inline_comments) = review.comments()?;
         let metadata = review.get_metadata()?;
 
-        if review_comment.is_empty() && inline_comments.is_empty() {
+        if review_comment.is_empty()
+            && inline_comments.is_empty()
+            && review_action != ReviewAction::Approve
+        {
             bail!("No review comments");
         }
 
