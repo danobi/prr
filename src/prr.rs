@@ -250,7 +250,7 @@ impl Prr {
             println!("{}", serde_json::to_string_pretty(&body)?);
         }
 
-        let path = format!("/repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
+        let path = format!("repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
         match self
             .crab
             ._post(self.crab.absolute_url(path)?, Some(&body))
