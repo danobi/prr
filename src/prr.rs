@@ -63,6 +63,27 @@ pub struct Prr {
     crab: Octocrab,
 }
 
+impl Config {
+    /// Returns GH URL to use. Sanitizes if necessary.
+    fn url(&self) -> String {
+        match &self.prr.url {
+            Some(url) => {
+                // Custom URLs must have a trailing `/`. Otherwise the custom
+                // path can be truncated.
+                //
+                // See: https://docs.rs/reqwest/0.11.22/reqwest/struct.Url.html#method.join
+                let mut sanitized = url.clone();
+                if !url.ends_with('/') {
+                    sanitized.push('/');
+                }
+
+                sanitized
+            }
+            None => GITHUB_BASE_URL.into(),
+        }
+    }
+}
+
 impl Prr {
     /// Create a new Prr object using the main config and/or the local config.
     /// If a local config has the `[prr]` section use this one instead of the main config.
@@ -94,7 +115,7 @@ impl Prr {
 
         let octocrab = Octocrab::builder()
             .personal_token(config.prr.token.clone())
-            .base_url(config.prr.url.as_deref().unwrap_or(GITHUB_BASE_URL))
+            .base_url(config.url())
             .context("Failed to parse github base URL")?
             .build()
             .context("Failed to create GH client")?;
