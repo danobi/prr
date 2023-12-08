@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use anyhow::{anyhow, bail, Context, Result};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::parser::{Comment, InlineComment, ReviewAction, ReviewParser};
+use crate::parser::{Comment, FileComment, InlineComment, ReviewAction, ReviewParser};
 
 /// Represents the state of a single review
 pub struct Review {
@@ -209,8 +209,8 @@ impl Review {
 
     /// Parse the user-supplied comments on a review
     ///
-    /// Returns (overall review action, overall review comment, inline comments)
-    pub fn comments(&self) -> Result<(ReviewAction, String, Vec<InlineComment>)> {
+    /// Returns (overall review action, overall review comment, inline comments, file comments)
+    pub fn comments(&self) -> Result<(ReviewAction, String, Vec<InlineComment>, Vec<FileComment>)> {
         let contents = fs::read_to_string(self.path()).context("Failed to read review file")?;
         self.validate_review_file(&contents)?;
 
@@ -218,6 +218,7 @@ impl Review {
         let mut review_action = ReviewAction::Comment;
         let mut review_comment = String::new();
         let mut inline_comments = Vec::new();
+        let mut file_comments = Vec::new();
         for (idx, line) in contents.lines().enumerate() {
             let res = parser
                 .parse_line(line)
@@ -233,6 +234,7 @@ impl Review {
                 }
                 Some(Comment::Inline(c)) => inline_comments.push(c),
                 Some(Comment::ReviewAction(a)) => review_action = a,
+                Some(Comment::File(fc)) => file_comments.push(fc),
                 None => {}
             }
         }
@@ -242,10 +244,16 @@ impl Review {
             // Original diff must have been short to begin with
             Some(Comment::Review(_)) => bail!("Unexpected review comment at parser finish"),
             Some(Comment::ReviewAction(_)) => bail!("Unexpected review action at parser finish"),
+            Some(Comment::File(_)) => bail!("Unexpected file-level comment at parser finish"),
             None => {}
         };
 
-        Ok((review_action, review_comment, inline_comments))
+        Ok((
+            review_action,
+            review_comment,
+            inline_comments,
+            file_comments,
+        ))
     }
 
     /// Update the review file's submission time

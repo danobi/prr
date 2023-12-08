@@ -216,7 +216,7 @@ impl Prr {
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let (review_action, review_comment, inline_comments) = review.comments()?;
+        let (review_action, review_comment, inline_comments, file_comments) = review.comments()?;
         let metadata = review.get_metadata()?;
 
         if review_comment.is_empty()
@@ -258,7 +258,12 @@ impl Prr {
                     }
 
                     json_comment
-                })
+                }).chain(file_comments.iter().map(|c| {
+                    json!({
+                        "path": c.file,
+                        "body": c.comment,
+                    })
+                }))
                 .collect::<Vec<Value>>(),
         });
         if let Some(id) = metadata.commit_id() {
@@ -345,11 +350,12 @@ impl Prr {
         for review in reviews {
             let metadata = review.get_metadata()?;
             let reviewed = {
-                let (_, review_comment, comments) = review.comments().with_context(|| {
-                    format!("Failed to parse comments for {}", review.path().display())
-                })?;
+                let (_, review_comment, comments, file_comments) =
+                    review.comments().with_context(|| {
+                        format!("Failed to parse comments for {}", review.path().display())
+                    })?;
 
-                !review_comment.is_empty() || !comments.is_empty()
+                !review_comment.is_empty() || !comments.is_empty() || !file_comments.is_empty()
             };
             let status = if metadata.submitted().is_some() {
                 "SUBMITTED"
