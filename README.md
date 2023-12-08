@@ -82,7 +82,7 @@ Syntax: Non-whitespace, non-quoted text at the beginning of the review file.
 
 #### File comment
 
-Description: File-level comment. You only get one of these per file.
+Description: File-level comment.
 
 Syntax: Non-whitespace, non-quoted text immediately following the `diff --git` header
 
