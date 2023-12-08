@@ -260,7 +260,9 @@ impl Prr {
                     json_comment
                 }).chain(file_comments.iter().map(|c| {
                     json!({
+                        // FIXME: Fix this, it outputs a comment on the hunk, not the file level.
                         "path": c.file,
+                        "position": 0,
                         "body": c.comment,
                     })
                 }))
