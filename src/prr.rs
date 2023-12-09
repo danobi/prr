@@ -10,7 +10,7 @@ use reqwest::StatusCode;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
-use crate::parser::{LineLocation, ReviewAction};
+use crate::parser::{FileComment, LineLocation, ReviewAction};
 use crate::review::{get_all_existing, Review};
 use regex::{Captures, Regex};
 
@@ -258,30 +258,45 @@ impl Prr {
                     }
 
                     json_comment
-                }).chain(file_comments.iter().map(|c| {
-                    json!({
-                        // FIXME: Fix this, it outputs a comment on the hunk, not the file level.
-                        "path": c.file,
-                        "position": 0,
-                        "body": c.comment,
-                    })
-                }))
+                })
                 .collect::<Vec<Value>>(),
         });
         if let Some(id) = metadata.commit_id() {
             if let serde_json::Value::Object(ref mut obj) = body {
                 obj.insert("commit_id".to_string(), json!(id));
             }
+        } else if !file_comments.is_empty() {
+            bail!(
+                "Metadata contained no commit_id, but it's required to leave file-level comments"
+            );
         }
 
         if debug {
             println!("{}", serde_json::to_string_pretty(&body)?);
         }
+        self.submit_review(&review, owner, repo, pr_num, &body)
+            .await?;
 
+        for fc in &file_comments {
+            self.submit_file_comment(owner, repo, pr_num, metadata.commit_id().unwrap(), fc)
+                .await?
+        }
+
+        Ok(())
+    }
+
+    async fn submit_review(
+        &self,
+        review: &Review,
+        owner: &str,
+        repo: &str,
+        pr_num: u64,
+        body: &Value,
+    ) -> Result<()> {
         let path = format!("repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
         match self
             .crab
-            ._post(self.crab.absolute_url(path)?, Some(&body))
+            ._post(self.crab.absolute_url(path)?, Some(body))
             .await
         {
             Ok(resp) => {
@@ -298,6 +313,50 @@ impl Prr {
                     .mark_submitted()
                     .context("Failed to update review metadata")?;
 
+                Ok(())
+            }
+            // GH is known to send unescaped control characters in JSON responses which
+            // serde will fail to parse (not that it should succeed)
+            Err(octocrab::Error::Json {
+                source: _,
+                backtrace: _,
+            }) => {
+                eprintln!("Warning: GH response had invalid JSON");
+                Ok(())
+            }
+            Err(e) => bail!("Error during POST: {}", e),
+        }
+    }
+
+    async fn submit_file_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_num: u64,
+        commit_id: &str,
+        fc: &FileComment,
+    ) -> Result<()> {
+        let body = json!({
+            "body": fc.comment,
+            "commit_id": commit_id,
+            "path": fc.file,
+            "subject_type": "file",
+        });
+        let path = format!("repos/{}/{}/pulls/{}/comments", owner, repo, pr_num);
+        match self
+            .crab
+            ._post(self.crab.absolute_url(path)?, Some(&body))
+            .await
+        {
+            Ok(resp) => {
+                let status = resp.status();
+                if status != StatusCode::CREATED {
+                    let text = resp
+                        .text()
+                        .await
+                        .context("Failed to decode failed response")?;
+                    bail!("Error during POST: Status code: {}, Body: {}", status, text);
+                }
                 Ok(())
             }
             // GH is known to send unescaped control characters in JSON responses which
