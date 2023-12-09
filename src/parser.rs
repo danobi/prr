@@ -44,6 +44,17 @@ pub struct InlineComment {
     pub comment: String,
 }
 
+/// Represents a single file-level comment on a review
+#[derive(Debug, PartialEq, Eq)]
+pub struct FileComment {
+    /// File the comment is in
+    ///
+    /// Note that this is the new filename if the file was also moved
+    pub file: String,
+    /// The user-supplied review comment
+    pub comment: String,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ReviewAction {
     Approve,
@@ -60,6 +71,8 @@ pub enum Comment {
     Inline(InlineComment),
     /// Overall approve, reject, or comment on review
     ReviewAction(ReviewAction),
+    // A file-level comment (attached to the whole file)
+    File(FileComment),
 }
 
 #[derive(Default)]
@@ -71,6 +84,8 @@ struct StartState {
 struct FilePreambleState {
     /// Relative path of the file under diff
     file: String,
+    /// Each line of file-level comment is stored as an entry
+    comment: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -243,6 +258,7 @@ impl ReviewParser {
 
                     self.state = State::FilePreamble(FilePreambleState {
                         file: parse_diff_header(line)?,
+                        comment: vec![],
                     });
 
                     return Ok(review_comment);
@@ -262,15 +278,13 @@ impl ReviewParser {
             }
             State::FilePreamble(state) => {
                 if !is_quoted {
-                    bail!(
-                        "Unexpected comment in file preamble state, file: {}",
-                        state.file
-                    );
+                    state.comment.push(line.to_owned());
                 }
 
                 if is_diff_header(line) {
                     self.state = State::FilePreamble(FilePreambleState {
                         file: parse_diff_header(line)?,
+                        comment: vec![],
                     });
                     return Ok(None);
                 }
@@ -279,6 +293,16 @@ impl ReviewParser {
                     // Subtract 1 b/c this line is before the actual diff hunk
                     left_start = left_start.saturating_sub(1);
                     right_start = right_start.saturating_sub(1);
+
+                    // Finish up our file-level comment if we had one
+                    let comment = if !state.comment.is_empty() {
+                        Some(Comment::File(FileComment {
+                            file: state.file.to_owned(),
+                            comment: state.comment.join("\n").trim().to_string(),
+                        }))
+                    } else {
+                        None
+                    };
 
                     self.state = State::FileDiff(FileDiffState {
                         file: state.file.to_owned(),
@@ -291,6 +315,10 @@ impl ReviewParser {
                         },
                         span_start_line: None,
                     });
+
+                    if let Some(comment) = comment {
+                        return Ok(Some(comment));
+                    }
                 }
 
                 Ok(None)
@@ -307,6 +335,7 @@ impl ReviewParser {
 
                         self.state = State::FilePreamble(FilePreambleState {
                             file: parse_diff_header(line)?,
+                            comment: vec![],
                         });
                     } else if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)?
                     {
@@ -413,6 +442,7 @@ impl ReviewParser {
                     if is_diff_header(line) {
                         self.state = State::FilePreamble(FilePreambleState {
                             file: parse_diff_header(line)?,
+                            comment: vec![],
                         });
                     } else {
                         let (next_left, next_right) = get_next_lines(
@@ -550,6 +580,17 @@ mod tests {
                 comment: "Comment 1".to_string(),
             }),
         ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn file_comment() {
+        let input = include_str!("../testdata/file_comment");
+        let expected = vec![Comment::File(FileComment {
+            file: "libbpf-cargo/src/btf/btf.rs".to_string(),
+            comment: "This is a file-level comment!".to_string(),
+        })];
 
         test(input, &expected);
     }

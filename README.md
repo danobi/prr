@@ -80,6 +80,14 @@ Syntax: Non-whitespace, non-quoted text at the beginning of the review file.
 
 [Example](examples/review_comment.prr)
 
+#### File comment
+
+Description: File-level comment.
+
+Syntax: Non-whitespace, non-quoted text immediately following the `diff --git` header
+
+[Example](examples/file_comment.prr)
+
 #### Inline comment
 
 Description: Inline comment attached to a specific line of the diff.
