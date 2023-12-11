@@ -15,7 +15,14 @@ The tool was born of frustration from using the point-and-click editor text
 boxes on PRs. I happen to do a lot of code review and tabbing to and from the
 browser to cross reference code from the changes was driving me nuts.
 
-### Installation / Quickstart
+## Contents:
+
+- [Installation / Quickstart](#installation--quickstart)
+- [Feature reference](#features)
+- [Vim integration](#vim-integration)
+- [Config reference](#config)
+
+## Installation / Quickstart
 
 1. Install `prr`:
 
@@ -70,7 +77,7 @@ browser to cross reference code from the changes was driving me nuts.
     For details on how to actually mark up the review file, see the next
     section titled "Features"
 
-### Features
+## Features
 
 #### Review comment
 
@@ -116,7 +123,7 @@ Syntax: `@prr approve`, `@prr reject`, or `@prr comment`.
 
 [Example](examples/prr_directive.prr)
 
-### Vim integration
+## Vim integration
 
 `vim/` directory contains Vim plugin providing syntax coloring, filetype
 detection and folding configuration for `*.prr` files.
@@ -135,6 +142,11 @@ Plugin 'danobi/prr', {'rtp': 'vim/'}
 Copy the provided `*.vim` files into their appropriate subdirectories in
 `~/.vim`.
 
+#### Syntax colors
+
+The `prr` "plugin" exports some preconfigured syntax hooks. Here's [an example][0]
+of how to customize the individual colors.
+
 #### Folding
 
 With default Vim configuration all folds will be closed by default, so if you
@@ -145,7 +157,7 @@ want them to be opened then you need to do one of these:
 
 Consult `:h folding` for more details.
 
-### Config
+## Config
 
 `prr` supports various configuration options spread over one or more config
 files. The global config file must be located at `$XDG_CONFIG_HOME/prr/config.toml`.
@@ -179,3 +191,6 @@ sub-directories.
 
 This table may not be specified in both a local config file and the global
 config file.
+
+
+[0]: https://github.com/danobi/dotfiles/blob/ab00f235fffd4c8d5e2496657e8047e1473d9257/vim/.vimrc#L81-L94
