@@ -23,6 +23,14 @@ enum Command {
         /// Pull request to review (eg. `danobi/prr/24`)
         pr: String,
     },
+    /// Get a pull request and open it in $EDITOR
+    Edit {
+        /// Ignore unsubmitted review checks
+        #[clap(short, long)]
+        force: bool,
+        /// Pull request to review (eg. `danobi/prr/24`)
+        pr: String,
+    },
     /// Submit a review
     Submit {
         /// Pull request to review (eg. `danobi/prr/24`)
@@ -95,6 +103,18 @@ async fn main() -> Result<()> {
             let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             println!("{}", review.path().display());
+        }
+        Command::Edit { pr, force } => {
+            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
+            let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
+            let editor = env::var("EDITOR")?;
+            let path = review.path();
+            std::process::Command::new(editor)
+                .arg(path)
+                .spawn()
+                .expect("Failed to execute editor process")
+                .wait()
+                .expect("Editor returned non-zero status");
         }
         Command::Submit { pr, debug } => {
             let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
