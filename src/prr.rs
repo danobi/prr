@@ -1,9 +1,9 @@
-use lazy_static::lazy_static;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use git2::{ApplyLocation, Diff, Repository, StatusOptions};
+use lazy_static::lazy_static;
 use octocrab::Octocrab;
 use prettytable::{format, row, Table};
 use reqwest::StatusCode;
@@ -47,6 +47,8 @@ struct PrrConfig {
 struct PrrLocalConfig {
     /// Default url for this current project
     repository: Option<String>,
+    /// Local workdir override
+    workdir: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +61,8 @@ struct Config {
 pub struct Prr {
     /// User config
     config: Config,
+    /// Path to local config file
+    local_config: Option<PathBuf>,
     /// Instantiated github client
     crab: Octocrab,
 }
@@ -94,7 +98,7 @@ impl Prr {
     /// `redefinition of table `prr` for key `prr` at ...`
     pub fn new(config_path: &Path, local_config_path: Option<PathBuf>) -> Result<Prr> {
         let config_contents = fs::read_to_string(config_path).context("Failed to read config")?;
-        let local_config_contents = if let Some(project_config_path) = local_config_path {
+        let local_config_contents = if let Some(project_config_path) = &local_config_path {
             fs::read_to_string(project_config_path).context("Failed to read local config")?
         } else {
             String::new()
@@ -122,24 +126,48 @@ impl Prr {
 
         Ok(Prr {
             config,
+            local_config: local_config_path,
             crab: octocrab,
         })
     }
 
+    /// Returns path to prr workdir
     fn workdir(&self) -> Result<PathBuf> {
-        match &self.config.prr.workdir {
-            Some(d) => {
-                if d.starts_with('~') {
-                    bail!("Workdir may not use '~' to denote home directory");
+        // Try local config first
+        if let Some(lcfg) = &self.config.local {
+            // Can't have a parsed local config without a stored path
+            debug_assert!(self.local_config.is_some());
+
+            if let Some(wd) = &lcfg.workdir {
+                if wd.starts_with('~') {
+                    bail!("Invalid workdir={wd}: may not use '~'");
                 }
 
-                Ok(Path::new(d).to_path_buf())
-            }
-            None => {
-                let xdg_dirs = xdg::BaseDirectories::with_prefix("prr")?;
-                Ok(xdg_dirs.get_data_home())
+                // We allow resolving relative paths in local config relative to the local config file
+                let mut resolved_wd = PathBuf::new();
+                // No parent seems impossible but I think it's correct to not push anything
+                if let Some(local_dir) = self.local_config.as_ref().unwrap().parent() {
+                    resolved_wd.push(local_dir);
+                }
+                // NB: pushing an absolute path overwrites the PathBuf
+                resolved_wd.push(wd);
+
+                return Ok(resolved_wd);
             }
         }
+
+        // Now try global config
+        if let Some(wd) = &self.config.prr.workdir {
+            if wd.starts_with('~') {
+                bail!("Invalid workdir={wd}: may not use '~'");
+            }
+
+            return Ok(Path::new(wd).to_path_buf());
+        }
+
+        // Default workdir
+        let xdg_dirs = xdg::BaseDirectories::with_prefix("prr")?;
+        Ok(xdg_dirs.get_data_home())
     }
 
     /// Parses a PR string in the form of `danobi/prr/24` and returns
