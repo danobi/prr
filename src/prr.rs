@@ -162,7 +162,12 @@ impl Prr {
                 bail!("Invalid workdir={wd}: may not use '~'");
             }
 
-            return Ok(Path::new(wd).to_path_buf());
+            let p = Path::new(wd).to_path_buf();
+            if !p.is_absolute() {
+                bail!("Invalid workdir={wd}: must be absolute path");
+            }
+
+            return Ok(p);
         }
 
         // Default workdir
