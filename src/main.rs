@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod backend;
 mod parser;
 mod prr;
 mod review;

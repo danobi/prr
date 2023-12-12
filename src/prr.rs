@@ -4,12 +4,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use git2::{ApplyLocation, Diff, Repository, StatusOptions};
-use octocrab::Octocrab;
 use prettytable::{format, row, Table};
-use reqwest::StatusCode;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
+use crate::backend::{new_backend, Backend};
 use crate::parser::{FileComment, LineLocation, ReviewAction};
 use crate::review::{get_all_existing, Review};
 use regex::{Captures, Regex};
@@ -32,40 +31,40 @@ lazy_static! {
 const GITHUB_BASE_URL: &str = "https://api.github.com";
 
 #[derive(Debug, Deserialize)]
-struct PrrConfig {
+pub struct PrrConfig {
     /// GH personal token
-    token: String,
+    pub token: String,
     /// Directory to place review files
-    workdir: Option<String>,
+    pub workdir: Option<String>,
     /// Github URL
     ///
     /// Useful for enterprise instances with custom URLs
-    url: Option<String>,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-struct PrrLocalConfig {
+pub struct PrrLocalConfig {
     /// Default url for this current project
-    repository: Option<String>,
+    pub repository: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Config {
-    prr: PrrConfig,
-    local: Option<PrrLocalConfig>,
+pub struct Config {
+    pub prr: PrrConfig,
+    pub local: Option<PrrLocalConfig>,
 }
 
 /// Main struct that coordinates all business logic and talks to GH
 pub struct Prr {
     /// User config
     config: Config,
-    /// Instantiated github client
-    crab: Octocrab,
+    /// SCM backend implementation
+    backend: Box<dyn Backend>,
 }
 
 impl Config {
     /// Returns GH URL to use. Sanitizes if necessary.
-    fn url(&self) -> String {
+    pub fn url(&self) -> String {
         match &self.prr.url {
             Some(url) => {
                 // Custom URLs must have a trailing `/`. Otherwise the custom
@@ -113,17 +112,9 @@ impl Prr {
             }
         };
 
-        let octocrab = Octocrab::builder()
-            .personal_token(config.prr.token.clone())
-            .base_url(config.url())
-            .context("Failed to parse github base URL")?
-            .build()
-            .context("Failed to create GH client")?;
+        let backend = new_backend(&config)?;
 
-        Ok(Prr {
-            config,
-            crab: octocrab,
-        })
+        Ok(Prr { config, backend })
     }
 
     fn workdir(&self) -> Result<PathBuf> {
@@ -189,27 +180,15 @@ impl Prr {
         pr_num: u64,
         force: bool,
     ) -> Result<Review> {
-        let pr_handler = self.crab.pulls(owner, repo);
-
-        let diff = pr_handler
-            .get_diff(pr_num)
-            .await
-            .context("Failed to fetch diff")?;
-
-        let commit_id = pr_handler
-            .get(pr_num)
-            .await
-            .context("Failed to fetch commit ID")?
-            .head
-            .sha;
+        let pr_info = self.backend.get_pr_info(owner, repo, pr_num).await?;
 
         Review::new(
             &self.workdir()?,
-            diff,
+            pr_info.diff,
             owner,
             repo,
             pr_num,
-            commit_id,
+            pr_info.commit,
             force,
         )
     }
@@ -293,39 +272,12 @@ impl Prr {
         pr_num: u64,
         body: &Value,
     ) -> Result<()> {
-        let path = format!("repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
-        match self
-            .crab
-            ._post(self.crab.absolute_url(path)?, Some(body))
-            .await
-        {
-            Ok(resp) => {
-                let status = resp.status();
-                if status != StatusCode::OK {
-                    let text = resp
-                        .text()
-                        .await
-                        .context("Failed to decode failed response")?;
-                    bail!("Error during POST: Status code: {}, Body: {}", status, text);
-                }
-
-                review
-                    .mark_submitted()
-                    .context("Failed to update review metadata")?;
-
-                Ok(())
-            }
-            // GH is known to send unescaped control characters in JSON responses which
-            // serde will fail to parse (not that it should succeed)
-            Err(octocrab::Error::Json {
-                source: _,
-                backtrace: _,
-            }) => {
-                eprintln!("Warning: GH response had invalid JSON");
-                Ok(())
-            }
-            Err(e) => bail!("Error during POST: {}", e),
-        }
+        self.backend
+            .submit_review(owner, repo, pr_num, body)
+            .await?;
+        review
+            .mark_submitted()
+            .context("Failed to update review metadata")
     }
 
     async fn submit_file_comment(
@@ -336,40 +288,9 @@ impl Prr {
         commit_id: &str,
         fc: &FileComment,
     ) -> Result<()> {
-        let body = json!({
-            "body": fc.comment,
-            "commit_id": commit_id,
-            "path": fc.file,
-            "subject_type": "file",
-        });
-        let path = format!("repos/{}/{}/pulls/{}/comments", owner, repo, pr_num);
-        match self
-            .crab
-            ._post(self.crab.absolute_url(path)?, Some(&body))
+        self.backend
+            .submit_file_comment(owner, repo, pr_num, commit_id, fc)
             .await
-        {
-            Ok(resp) => {
-                let status = resp.status();
-                if status != StatusCode::CREATED {
-                    let text = resp
-                        .text()
-                        .await
-                        .context("Failed to decode failed response")?;
-                    bail!("Error during POST: Status code: {}, Body: {}", status, text);
-                }
-                Ok(())
-            }
-            // GH is known to send unescaped control characters in JSON responses which
-            // serde will fail to parse (not that it should succeed)
-            Err(octocrab::Error::Json {
-                source: _,
-                backtrace: _,
-            }) => {
-                eprintln!("Warning: GH response had invalid JSON");
-                Ok(())
-            }
-            Err(e) => bail!("Error during POST: {}", e),
-        }
     }
 
     pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
@@ -443,66 +364,70 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
-    lazy_static! {
-        static ref PRR: Prr = {
-            let tmp_dir = TempDir::new().unwrap();
-            let path = tmp_dir.path().join("config.toml");
-            let mut file = File::create(path.clone()).unwrap();
-            write!(&mut file, "[prr]\ntoken = \"test\"\nworkdir = \"/tmp\"").unwrap();
-            Prr::new(path.borrow(), None).unwrap()
-        };
+    fn new_prr() -> Prr {
+        let tmp_dir = TempDir::new().unwrap();
+        let path = tmp_dir.path().join("config.toml");
+        let mut file = File::create(path.clone()).unwrap();
+        write!(&mut file, "[prr]\ntoken = \"test\"\nworkdir = \"/tmp\"").unwrap();
+        Prr::new(path.borrow(), None).unwrap()
     }
 
     #[test]
     fn test_parse_basic_pr_str() {
+        let prr = new_prr();
         let pr_ref = "example/prr/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            prr.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr".to_string(), 42)
         )
     }
 
     #[test]
     fn test_parse_dotted_pr_str() {
+        let prr = new_prr();
         let pr_ref = "example/prr.test/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            prr.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr.test".to_string(), 42)
         )
     }
 
     #[test]
     fn test_parse_underscored_pr_str() {
+        let prr = new_prr();
         let pr_ref = "example/prr_test/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            prr.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr_test".to_string(), 42)
         )
     }
 
     #[test]
     fn test_parse_dashed_pr_str() {
+        let prr = new_prr();
         let pr_ref = "example/prr-test/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            prr.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr-test".to_string(), 42)
         )
     }
 
     #[test]
     fn test_parse_numbered_pr_str() {
+        let prr = new_prr();
         let pr_ref = "example/prr1/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            prr.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr1".to_string(), 42)
         )
     }
 
     #[test]
     fn test_parse_mixed_pr_str() {
+        let prr = new_prr();
         let pr_ref = "example/prr1.test_test-/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            prr.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr1.test_test-".to_string(), 42)
         )
     }

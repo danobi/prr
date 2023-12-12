@@ -993,6 +993,7 @@ name = "prr"
 version = "0.10.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "clap",
  "git2",
  "lazy_static",
