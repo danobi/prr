@@ -15,6 +15,9 @@ The tool was born of frustration from using the point-and-click editor text
 boxes on PRs. I happen to do a lot of code review and tabbing to and from the
 browser to cross reference code from the changes was driving me nuts.
 
+For a higher level walkthrough of `prr`, please see my blog posts: [Pull
+request review (prr)][1] and [Pull request review: still files!][2]
+
 ## Contents:
 
 - [Installation / Quickstart](#installation--quickstart)
@@ -197,3 +200,5 @@ config file.
 
 
 [0]: https://github.com/danobi/dotfiles/blob/ab00f235fffd4c8d5e2496657e8047e1473d9257/vim/.vimrc#L81-L94
+[1]: https://dxuuu.xyz/prr.html
+[2]: https://dxuuu.xyz/prr2.html
