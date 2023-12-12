@@ -471,18 +471,42 @@ impl Prr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Borrow;
     use std::fs::File;
     use std::io::Write;
     use tempfile::TempDir;
 
+    // Lays down configs in a tempdir
+    //
+    // NB: Configs get deleted if returned `TempDir` is dropped
+    fn config(global: &str, local: Option<&str>) -> (Prr, TempDir) {
+        let dir = TempDir::new().unwrap();
+        let gpath = dir.path().join("config.toml");
+        let mut gfile = File::create(&gpath).unwrap();
+        write!(&mut gfile, "{}", global).unwrap();
+
+        let lpath = if let Some(lcontents) = local {
+            let lpath = dir.path().join("local_config.toml");
+            let mut lfile = File::create(&lpath).unwrap();
+            write!(&mut lfile, "{}", lcontents).unwrap();
+            Some(lpath)
+        } else {
+            None
+        };
+
+        let prr = Prr::new(&gpath, lpath).unwrap();
+        (prr, dir)
+    }
+
     lazy_static! {
-        static ref PRR: Prr = {
-            let tmp_dir = TempDir::new().unwrap();
-            let path = tmp_dir.path().join("config.toml");
-            let mut file = File::create(path.clone()).unwrap();
-            write!(&mut file, "[prr]\ntoken = \"test\"\nworkdir = \"/tmp\"").unwrap();
-            Prr::new(path.borrow(), None).unwrap()
+        // Basic dummy config just to avoid errors
+        static ref PRR: (Prr, TempDir) = {
+            let gconfig = r#"
+                [prr]
+                token = "test"
+                workdir = "/tmp"
+            "#;
+
+            config(gconfig, None)
         };
     }
 
@@ -490,7 +514,7 @@ mod tests {
     fn test_parse_basic_pr_str() {
         let pr_ref = "example/prr/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr".to_string(), 42)
         )
     }
@@ -499,7 +523,7 @@ mod tests {
     fn test_parse_dotted_pr_str() {
         let pr_ref = "example/prr.test/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr.test".to_string(), 42)
         )
     }
@@ -508,7 +532,7 @@ mod tests {
     fn test_parse_underscored_pr_str() {
         let pr_ref = "example/prr_test/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr_test".to_string(), 42)
         )
     }
@@ -517,7 +541,7 @@ mod tests {
     fn test_parse_dashed_pr_str() {
         let pr_ref = "example/prr-test/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr-test".to_string(), 42)
         )
     }
@@ -526,7 +550,7 @@ mod tests {
     fn test_parse_numbered_pr_str() {
         let pr_ref = "example/prr1/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr1".to_string(), 42)
         )
     }
@@ -535,8 +559,99 @@ mod tests {
     fn test_parse_mixed_pr_str() {
         let pr_ref = "example/prr1.test_test-/42";
         assert_eq!(
-            PRR.parse_pr_str(pr_ref).unwrap(),
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr1.test_test-".to_string(), 42)
         )
+    }
+
+    #[test]
+    fn test_local_config_repository() {
+        let gconfig = r#"
+            [prr]
+            token = "test"
+        "#;
+        let lconfig = r#"
+            [local]
+            repository = "testorg/testrepo"
+        "#;
+
+        let (prr, _dir) = config(gconfig, Some(lconfig));
+        assert_eq!(
+            prr.parse_pr_str("42").unwrap(),
+            ("testorg".to_string(), "testrepo".to_string(), 42)
+        )
+    }
+
+    #[test]
+    fn test_global_workdir() {
+        let gconfig = r#"
+            [prr]
+            token = "test"
+            workdir = "/globalworkdir"
+        "#;
+
+        let (prr, _dir) = config(gconfig, None);
+        assert_eq!(prr.workdir().unwrap(), Path::new("/globalworkdir"))
+    }
+
+    #[test]
+    fn test_local_workdir() {
+        let gconfig = r#"
+            [prr]
+            token = "test"
+        "#;
+        let lconfig = r#"
+            [local]
+            workdir = "/localworkdir"
+        "#;
+
+        let (prr, _dir) = config(gconfig, Some(lconfig));
+        assert_eq!(prr.workdir().unwrap(), Path::new("/localworkdir"))
+    }
+
+    #[test]
+    fn test_local_workdir_relative() {
+        let gconfig = r#"
+            [prr]
+            token = "test"
+        "#;
+        let lconfig = r#"
+            [local]
+            workdir = "localrelativeworkdir"
+        "#;
+
+        let (prr, dir) = config(gconfig, Some(lconfig));
+        assert_eq!(
+            prr.workdir().unwrap(),
+            dir.path().join("localrelativeworkdir")
+        )
+    }
+
+    #[test]
+    fn test_local_workdir_override() {
+        let gconfig = r#"
+            [prr]
+            token = "test"
+            workdir = "/globalworkdir"
+        "#;
+        let lconfig = r#"
+            [local]
+            workdir = "/localworkdir"
+        "#;
+
+        let (prr, _dir) = config(gconfig, Some(lconfig));
+        assert_eq!(prr.workdir().unwrap(), Path::new("/localworkdir"))
+    }
+
+    #[test]
+    fn test_invalid_relative_workdir() {
+        let gconfig = r#"
+            [prr]
+            token = "test"
+            workdir = "relativeworkdir"
+        "#;
+
+        let (prr, _dir) = config(gconfig, None);
+        assert!(prr.workdir().is_err());
     }
 }
