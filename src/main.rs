@@ -112,9 +112,10 @@ async fn main() -> Result<()> {
             std::process::Command::new(editor)
                 .arg(path)
                 .spawn()
-                .expect("Failed to execute editor process")
+                .spawn()
+                .context("Failed to execute editor process")?
                 .wait()
-                .expect("Editor returned non-zero status");
+                .context("Editor returned non-zero status")?;
         }
         Command::Submit { pr, debug } => {
             let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
