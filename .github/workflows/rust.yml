@@ -11,9 +11,7 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
     - name: Build
@@ -22,3 +20,17 @@ jobs:
       run: cargo test --verbose
     - name: Run rustfmt
       run: cargo fmt --check
+
+  static:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-unknown-linux-musl
+    - name: Install host deps
+      run: sudo apt-get install -y musl-tools
+    - name: Build + link statically
+      run: cargo build --verbose --release --target=x86_64-unknown-linux-musl --features vendored-openssl
+    - name: Validate binary is statically linked
+      run: ldd ./target/x86_64-unknown-linux-musl/release/prr 2>&1 | grep -q "statically linked"
