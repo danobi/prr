@@ -24,3 +24,8 @@ xdg = "2.4"
 
 [dev-dependencies]
 tempfile = "3.8.1"
+
+[features]
+# Statically link a vendored copy OpenSSL. OpenSSL is used by all of `git2`, `reqwest` and
+# `octocrab`, enabling vendoring for just one of them should be enough.
+vendored-openssl = ["git2/vendored-openssl"]
