@@ -12,10 +12,12 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -Dwarnings
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: cargo build --verbose
+      run: cargo test --verbose --no-run
     - name: Run tests
       run: cargo test --verbose
 
