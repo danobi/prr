@@ -416,7 +416,6 @@ impl Prr {
 
         // Best effort check to prevent clobbering any work in progress
         let mut status_opts = StatusOptions::new();
-        status_opts.include_untracked(true);
         let statuses = repo
             .statuses(Some(&mut status_opts))
             .context("Failed to get repo status")?;
