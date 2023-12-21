@@ -1,7 +1,8 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 
 mod parser;
@@ -22,6 +23,9 @@ enum Command {
         force: bool,
         /// Pull request to review (eg. `danobi/prr/24`)
         pr: String,
+        /// Open review file in $EDITOR after download
+        #[clap(long)]
+        open: bool,
     },
     /// Submit a review
     Submit {
@@ -75,6 +79,21 @@ fn find_project_config_file() -> Option<PathBuf> {
     })
 }
 
+/// Opens a file in $EDITOR
+fn open_review(file: &Path) -> Result<()> {
+    let editor = env::var("EDITOR").context("Failed to read $EDITOR")?;
+    let status = process::Command::new(editor)
+        .arg(file)
+        .status()
+        .context("Failed to execute editor process")?;
+
+    match status.code() {
+        Some(0) => Ok(()),
+        Some(rc) => bail!("EDITOR exited unclean: {}", rc),
+        None => bail!("Failed to get EDITOR exit status"),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -91,10 +110,14 @@ async fn main() -> Result<()> {
     let prr = Prr::new(&config_path, find_project_config_file())?;
 
     match args.command {
-        Command::Get { pr, force } => {
+        Command::Get { pr, force, open } => {
             let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
-            println!("{}", review.path().display());
+            let path = review.path();
+            println!("{}", path.display());
+            if open {
+                open_review(&path).context("Failed to open review file")?;
+            }
         }
         Command::Submit { pr, debug } => {
             let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
