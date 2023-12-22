@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use git2::{ApplyLocation, Diff, Repository, StatusOptions};
+use git2::{ApplyLocation, Diff, Repository};
 use lazy_static::lazy_static;
 use octocrab::Octocrab;
 use prettytable::{format, row, Table};
@@ -415,11 +415,7 @@ impl Prr {
         let repo = Repository::open_from_env().context("Failed to open git repository")?;
 
         // Best effort check to prevent clobbering any work in progress
-        let mut status_opts = StatusOptions::new();
-        status_opts.include_untracked(true);
-        let statuses = repo
-            .statuses(Some(&mut status_opts))
-            .context("Failed to get repo status")?;
+        let statuses = repo.statuses(None).context("Failed to get repo status")?;
         if !statuses.is_empty() {
             bail!("Working directory is dirty");
         }
