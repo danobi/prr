@@ -21,8 +21,9 @@
 - [x] Support updating a PR's review file, but ask for confirmation if review file has been modified and not submitted yet
     - [x] Maybe even check mtime between review file and submission time?
 - [x] Support parsing github url from stdin
-- [ ] Save commit hash of downloaded review file
+- [x] Save commit hash of downloaded review file
 - [ ] Support [...] snipping
+- [ ] Support comment threads. Maybe do nested '>'s like actual mailing lists?
 
 # Thoughts
 
