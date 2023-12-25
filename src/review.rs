@@ -1,8 +1,7 @@
 use std::fmt::Write as fmt_write;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::{ErrorKind, Write};
-use std::os::unix::fs::MetadataExt;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -327,36 +326,14 @@ impl Review {
 
     /// Returns whether or not there exist unsubmitted changes on disk
     fn unsubmitted(&self) -> Result<bool> {
-        let data = match fs::read_to_string(self.metadata_path()) {
-            Ok(d) => d,
-            Err(e) => match e.kind() {
-                // If there's not yet a metadata file, means review not started yet
-                ErrorKind::NotFound => return Ok(false),
-                _ => bail!("Failed to read review metadata: {}", e),
-            },
-        };
-        let metadata: ReviewMetadata =
-            serde_json::from_str(&data).context("Failed to parse metadata json")?;
-
-        let file_metadata = match fs::metadata(self.path()) {
-            Ok(m) => m,
-            Err(e) => match e.kind() {
-                // If there's not yet a review file, it cannot be unsubmitted
-                ErrorKind::NotFound => return Ok(false),
-                _ => bail!("Failed to open review file: {}", e),
-            },
-        };
-        let mtime: u64 = file_metadata
-            .mtime()
-            .try_into()
-            .context("mtime is negative")?;
-
-        match metadata.submitted {
-            // If modified time is more recent than last submission, then unsubmitted
-            Some(t) => Ok(mtime > t),
-            // If no last submission time, then default to unsubmitted
-            None => Ok(true),
+        // If a review file has been submitted, then any further changes are ignored
+        let metadata = self.get_metadata()?;
+        if metadata.submitted().is_some() {
+            return Ok(false);
         }
+
+        // Now we know the review is unsubmitted. But did user mark it up?
+        self.reviewed()
     }
 
     /// Returns whether or not there exists review comments
