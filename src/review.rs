@@ -171,11 +171,7 @@ impl Review {
         fs::create_dir_all(review_dir).context("Failed to create workdir directories")?;
 
         // Check if there are unsubmitted changes
-        if !force
-            && review
-                .unsubmitted()
-                .context("Failed to check for unsubmitted review")?
-        {
+        if !force && review.status()? == ReviewStatus::Reviewed {
             bail!(
                 "You have unsubmitted changes to the requested review. \
                 Either submit the existing changes, delete the existing review file, \
@@ -347,18 +343,6 @@ impl Review {
         Ok(())
     }
 
-    /// Returns whether or not there exist unsubmitted changes on disk
-    fn unsubmitted(&self) -> Result<bool> {
-        // If a review file has been submitted, then any further changes are ignored
-        let metadata = self.metadata()?;
-        if metadata.submitted().is_some() {
-            return Ok(false);
-        }
-
-        // Now we know the review is unsubmitted. But did user mark it up?
-        self.reviewed()
-    }
-
     /// Returns whether or not there exists review comments
     fn reviewed(&self) -> Result<bool> {
         let (_, review_comment, comments, file_comments) = self
@@ -414,11 +398,7 @@ impl Review {
 
     /// Remove review from filesystem
     pub fn remove(self, force: bool) -> Result<()> {
-        if !force
-            && self
-                .unsubmitted()
-                .context("Failed to check for unsubmitted review")?
-        {
+        if !force && self.status()? == ReviewStatus::Reviewed {
             bail!(
                 "You have unsubmitted changes to the requested review. \
                 Re-run this command with --force to ignore this check."
