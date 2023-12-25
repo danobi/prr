@@ -34,7 +34,7 @@ pub struct ReviewMetadata {
 }
 
 /// Status of a review
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum ReviewStatus {
     /// Newly downloaded review; no changes yet
     New,
@@ -453,5 +453,35 @@ mod tests {
 
         r.validate_review_file(review)
             .expect("Failed to validate review file");
+    }
+
+    // Step through review status state machine and validate each state
+    #[test]
+    fn test_review_status() {
+        let review = include_str!("../testdata/review/status/review");
+        let metadata = include_str!("../testdata/review/status/metadata");
+        let (r, _dir) = setup(review, metadata);
+
+        // Using more verbose match to ensure build failure if new states added.
+        // We only need this verbosity once.
+        match r.status().expect("Failed to get review status") {
+            ReviewStatus::New => (),
+            ReviewStatus::Reviewed => panic!("Unexpected Reviewed state"),
+            ReviewStatus::Submitted => panic!("Unpexected Submitted state"),
+        };
+
+        // Do a "review"
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(r.path())
+            .expect("Failed to open review file");
+        file.write_all(b"asdf\n")
+            .expect("Failed to write review comment");
+        assert_eq!(r.status().unwrap(), ReviewStatus::Reviewed);
+
+        // "Submit" the review
+        r.mark_submitted().expect("Failed to submit review");
+        assert_eq!(r.status().unwrap(), ReviewStatus::Submitted);
     }
 }
