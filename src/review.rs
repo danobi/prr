@@ -24,7 +24,7 @@ pub struct Review {
 
 /// Metadata for a single review. Stored as dotfile next to user-facing review file
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ReviewMetadata {
+struct ReviewMetadata {
     /// Original .diff file contents. Used to detect corrupted review files
     original: String,
     /// Time (seconds since epoch) the review file was last submitted
@@ -42,22 +42,6 @@ pub enum ReviewStatus {
     Reviewed,
     /// Review has been submitted. Any further changes to the review file are ignored
     Submitted,
-}
-
-impl ReviewMetadata {
-    pub fn commit_id(&self) -> Option<&str> {
-        self.commit_id.as_deref()
-    }
-
-    /// Returns the original, raw diff of the review
-    pub fn original(&self) -> &str {
-        &self.original
-    }
-
-    /// Returns last submitted time, if any
-    fn submitted(&self) -> Option<u64> {
-        self.submitted
-    }
 }
 
 impl Display for ReviewStatus {
@@ -363,7 +347,7 @@ impl Review {
     }
 
     /// Loads and returns the parsed contents of the metadata file for the review file
-    pub fn metadata(&self) -> Result<ReviewMetadata> {
+    fn metadata(&self) -> Result<ReviewMetadata> {
         let meta =
             fs::read_to_string(self.metadata_path()).context("Failed to load metadata file")?;
         serde_json::from_str::<ReviewMetadata>(&meta).context("Failed to parse metadata file")
@@ -376,6 +360,16 @@ impl Review {
         metadata_path
     }
 
+    /// Returns the commit_id associated with the review
+    pub fn commit_id(&self) -> Result<Option<String>> {
+        Ok(self.metadata()?.commit_id.clone())
+    }
+
+    /// Returns the original review diff
+    pub fn diff(&self) -> Result<String> {
+        Ok(self.metadata()?.original.clone())
+    }
+
     /// Returns a handle (eg "owner/repo/pr_num") to this review
     pub fn handle(&self) -> String {
         format!("{}/{}/{}", self.owner, self.repo, self.pr_num)
@@ -385,7 +379,7 @@ impl Review {
     pub fn status(&self) -> Result<ReviewStatus> {
         let metadata = self.metadata()?;
         let reviewed = self.reviewed()?;
-        let status = if metadata.submitted().is_some() {
+        let status = if metadata.submitted.is_some() {
             ReviewStatus::Submitted
         } else if reviewed {
             ReviewStatus::Reviewed

@@ -250,7 +250,6 @@ impl Prr {
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let (review_action, review_comment, inline_comments, file_comments) = review.comments()?;
-        let metadata = review.metadata()?;
 
         if review_comment.is_empty()
             && inline_comments.is_empty()
@@ -294,7 +293,9 @@ impl Prr {
                 })
                 .collect::<Vec<Value>>(),
         });
-        if let Some(id) = metadata.commit_id() {
+
+        let commit = review.commit_id()?;
+        if let Some(id) = &commit {
             if let serde_json::Value::Object(ref mut obj) = body {
                 obj.insert("commit_id".to_string(), json!(id));
             }
@@ -311,7 +312,7 @@ impl Prr {
             .await?;
 
         for fc in &file_comments {
-            self.submit_file_comment(owner, repo, pr_num, metadata.commit_id().unwrap(), fc)
+            self.submit_file_comment(owner, repo, pr_num, commit.as_ref().unwrap(), fc)
                 .await?
         }
 
@@ -407,9 +408,7 @@ impl Prr {
 
     pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let metadata = review.metadata().context("Failed to get review metadata")?;
-        let raw = metadata.original();
-        let diff = Diff::from_buffer(raw.as_bytes()).context("Failed to load original diff")?;
+        let diff = Diff::from_buffer(review.diff()?.as_bytes()).context("Failed to load diff")?;
         let repo = Repository::open_from_env().context("Failed to open git repository")?;
 
         // Best effort check to prevent clobbering any work in progress
