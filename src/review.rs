@@ -258,7 +258,7 @@ impl Review {
     /// Update the review file's submission time
     pub fn mark_submitted(&self) -> Result<()> {
         let metadata_path = self.metadata_path();
-        let mut metadata = self.get_metadata()?;
+        let mut metadata = self.metadata()?;
 
         let submission_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -293,7 +293,7 @@ impl Review {
             }
         }
 
-        let metadata = self.get_metadata()?;
+        let metadata = self.metadata()?;
         let original: String = metadata
             .original
             .lines()
@@ -327,7 +327,7 @@ impl Review {
     /// Returns whether or not there exist unsubmitted changes on disk
     fn unsubmitted(&self) -> Result<bool> {
         // If a review file has been submitted, then any further changes are ignored
-        let metadata = self.get_metadata()?;
+        let metadata = self.metadata()?;
         if metadata.submitted().is_some() {
             return Ok(false);
         }
@@ -356,7 +356,7 @@ impl Review {
     }
 
     /// Loads and returns the parsed contents of the metadata file for the review file
-    pub(crate) fn get_metadata(&self) -> Result<ReviewMetadata> {
+    pub(crate) fn metadata(&self) -> Result<ReviewMetadata> {
         let meta =
             fs::read_to_string(self.metadata_path()).context("Failed to load metadata file")?;
         serde_json::from_str::<ReviewMetadata>(&meta).context("Failed to parse metadata file")

@@ -250,7 +250,7 @@ impl Prr {
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let (review_action, review_comment, inline_comments, file_comments) = review.comments()?;
-        let metadata = review.get_metadata()?;
+        let metadata = review.metadata()?;
 
         if review_comment.is_empty()
             && inline_comments.is_empty()
@@ -407,9 +407,7 @@ impl Prr {
 
     pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let metadata = review
-            .get_metadata()
-            .context("Failed to get review metadata")?;
+        let metadata = review.metadata().context("Failed to get review metadata")?;
         let raw = metadata.original();
         let diff = Diff::from_buffer(raw.as_bytes()).context("Failed to load original diff")?;
         let repo = Repository::open_from_env().context("Failed to open git repository")?;
@@ -438,7 +436,7 @@ impl Prr {
             get_all_existing(&self.workdir()?).context("Failed to get existing reviews")?;
 
         for review in reviews {
-            let metadata = review.get_metadata()?;
+            let metadata = review.metadata()?;
             let reviewed = review.reviewed()?;
             let status = if metadata.submitted().is_some() {
                 "SUBMITTED"
@@ -473,7 +471,7 @@ impl Prr {
         let reviews =
             get_all_existing(&self.workdir()?).context("Failed to get existing reviews")?;
         for review in reviews {
-            let metadata = review.get_metadata()?;
+            let metadata = review.metadata()?;
             if metadata.submitted().is_some() {
                 let handle = review.handle();
                 review
