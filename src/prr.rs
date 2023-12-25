@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use git2::{ApplyLocation, Diff, Repository};
 use lazy_static::lazy_static;
 use octocrab::Octocrab;
@@ -459,6 +459,35 @@ impl Prr {
         }
 
         table.printstd();
+
+        Ok(())
+    }
+
+    /// Removes reviews from the filesystem
+    pub async fn remove(&self, prs: &[String], force: bool, submitted: bool) -> Result<()> {
+        for pr in prs {
+            let (owner, repo, pr_num) = self.parse_pr_str(pr)?;
+            let review = self.get_pr(&owner, &repo, pr_num, force).await?;
+            review
+                .remove(force)
+                .with_context(|| anyhow!("Failed to remove {}", pr))?;
+        }
+
+        if !submitted {
+            return Ok(());
+        }
+
+        let reviews =
+            get_all_existing(&self.workdir()?).context("Failed to get existing reviews")?;
+        for review in reviews {
+            let metadata = review.get_metadata()?;
+            if metadata.submitted().is_some() {
+                let handle = review.handle();
+                review
+                    .remove(force)
+                    .with_context(|| anyhow!("Failed to remove {}", handle))?;
+            }
+        }
 
         Ok(())
     }

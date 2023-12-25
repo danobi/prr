@@ -46,11 +46,14 @@ enum Command {
     },
     /// Remove a review
     Remove {
+        /// Pull requests to remove (eg. `danobi/prr/24`)
+        prs: Vec<String>,
         /// Ignore unsubmitted review checks
         #[clap(short, long)]
         force: bool,
-        /// Pull request to review (eg. `danobi/prr/24`)
-        pr: String,
+        /// Remove submitted reviews in addition to provided reviews
+        #[clap(short, long)]
+        submitted: bool,
     },
 }
 
@@ -130,10 +133,12 @@ async fn main() -> Result<()> {
         Command::Status { no_titles } => {
             prr.print_status(no_titles)?;
         }
-        Command::Remove { pr, force } => {
-            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
-            let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
-            review.remove(force)?;
+        Command::Remove {
+            prs,
+            force,
+            submitted,
+        } => {
+            prr.remove(&prs, force, submitted).await?;
         }
     }
 
