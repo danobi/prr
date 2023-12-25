@@ -215,6 +215,7 @@ impl Prr {
         }
     }
 
+    /// Gets a new review from the internet and writes it to the filesystem
     pub async fn get_pr(
         &self,
         owner: &str,
@@ -245,6 +246,12 @@ impl Prr {
             commit_id,
             force,
         )
+    }
+
+    /// Gets an existing review from the filesystem
+    pub fn get_review(&self, owner: &str, repo: &str, pr_num: u64) -> Result<Review> {
+        let workdir = self.workdir()?;
+        Ok(Review::new_existing(&workdir, owner, repo, pr_num))
     }
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {

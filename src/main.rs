@@ -27,6 +27,11 @@ enum Command {
         #[clap(long)]
         open: bool,
     },
+    /// Open an existing review in $EDITOR
+    Edit {
+        /// Pull request to edit (eg. `danobi/prr/24`)
+        pr: String,
+    },
     /// Submit a review
     Submit {
         /// Pull request to review (eg. `danobi/prr/24`)
@@ -84,6 +89,11 @@ fn find_project_config_file() -> Option<PathBuf> {
 
 /// Opens a file in $EDITOR
 fn open_review(file: &Path) -> Result<()> {
+    // This check should only ever trip for prr-edit
+    if !file.try_exists()? {
+        bail!("Review file does not exist yet");
+    }
+
     let editor = env::var("EDITOR").context("Failed to read $EDITOR")?;
     let status = process::Command::new(editor)
         .arg(file)
@@ -121,6 +131,11 @@ async fn main() -> Result<()> {
             if open {
                 open_review(&path).context("Failed to open review file")?;
             }
+        }
+        Command::Edit { pr } => {
+            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
+            let review = prr.get_review(&owner, &repo, pr_num)?;
+            open_review(&review.path()).context("Failed to open review file")?;
         }
         Command::Submit { pr, debug } => {
             let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
