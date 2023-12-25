@@ -1,4 +1,4 @@
-use std::fmt::Write as fmt_write;
+use std::fmt::{Display, Formatter, Result as fmt_result, Write as fmt_write};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -24,13 +24,24 @@ pub struct Review {
 
 /// Metadata for a single review. Stored as dotfile next to user-facing review file
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct ReviewMetadata {
+pub struct ReviewMetadata {
     /// Original .diff file contents. Used to detect corrupted review files
     original: String,
     /// Time (seconds since epoch) the review file was last submitted
     submitted: Option<u64>,
     /// The commit hash of the PR at the time the review was started
     commit_id: Option<String>,
+}
+
+/// Status of a review
+#[derive(PartialEq)]
+pub enum ReviewStatus {
+    /// Newly downloaded review; no changes yet
+    New,
+    /// Unsubmitted changes have been made to review file
+    Reviewed,
+    /// Review has been submitted. Any further changes to the review file are ignored
+    Submitted,
 }
 
 impl ReviewMetadata {
@@ -44,8 +55,20 @@ impl ReviewMetadata {
     }
 
     /// Returns last submitted time, if any
-    pub fn submitted(&self) -> Option<u64> {
+    fn submitted(&self) -> Option<u64> {
         self.submitted
+    }
+}
+
+impl Display for ReviewStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt_result {
+        let text = match self {
+            Self::New => "NEW",
+            Self::Reviewed => "REVIEWED",
+            Self::Submitted => "SUBMITTED",
+        };
+
+        write!(f, "{text}")
     }
 }
 
@@ -337,7 +360,7 @@ impl Review {
     }
 
     /// Returns whether or not there exists review comments
-    pub fn reviewed(&self) -> Result<bool> {
+    fn reviewed(&self) -> Result<bool> {
         let (_, review_comment, comments, file_comments) = self
             .comments()
             .with_context(|| anyhow!("Failed to parse comments for {}", self.path().display()))?;
@@ -356,7 +379,7 @@ impl Review {
     }
 
     /// Loads and returns the parsed contents of the metadata file for the review file
-    pub(crate) fn metadata(&self) -> Result<ReviewMetadata> {
+    pub fn metadata(&self) -> Result<ReviewMetadata> {
         let meta =
             fs::read_to_string(self.metadata_path()).context("Failed to load metadata file")?;
         serde_json::from_str::<ReviewMetadata>(&meta).context("Failed to parse metadata file")
@@ -372,6 +395,21 @@ impl Review {
     /// Returns a handle (eg "owner/repo/pr_num") to this review
     pub fn handle(&self) -> String {
         format!("{}/{}/{}", self.owner, self.repo, self.pr_num)
+    }
+
+    /// Gets the status of a review
+    pub fn status(&self) -> Result<ReviewStatus> {
+        let metadata = self.metadata()?;
+        let reviewed = self.reviewed()?;
+        let status = if metadata.submitted().is_some() {
+            ReviewStatus::Submitted
+        } else if reviewed {
+            ReviewStatus::Reviewed
+        } else {
+            ReviewStatus::New
+        };
+
+        Ok(status)
     }
 
     /// Remove review from filesystem

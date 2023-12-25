@@ -11,7 +11,7 @@ use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
 use crate::parser::{FileComment, LineLocation, ReviewAction};
-use crate::review::{get_all_existing, Review};
+use crate::review::{get_all_existing, Review, ReviewStatus};
 use regex::{Captures, Regex};
 
 // Use lazy static to ensure regex is only compiled once
@@ -432,21 +432,13 @@ impl Prr {
             table.set_titles(row!["Handle", "Status", "Review file"])
         }
 
-        let reviews =
-            get_all_existing(&self.workdir()?).context("Failed to get existing reviews")?;
-
+        let reviews = get_all_existing(&self.workdir()?).context("Failed to get all reviews")?;
         for review in reviews {
-            let metadata = review.metadata()?;
-            let reviewed = review.reviewed()?;
-            let status = if metadata.submitted().is_some() {
-                "SUBMITTED"
-            } else if reviewed {
-                "REVIEWED"
-            } else {
-                "NEW"
-            };
-
-            table.add_row(row![review.handle(), status, review.path().display()]);
+            table.add_row(row![
+                review.handle(),
+                review.status()?,
+                review.path().display()
+            ]);
         }
 
         table.printstd();
@@ -468,11 +460,9 @@ impl Prr {
             return Ok(());
         }
 
-        let reviews =
-            get_all_existing(&self.workdir()?).context("Failed to get existing reviews")?;
+        let reviews = get_all_existing(&self.workdir()?).context("Failed to all reviews")?;
         for review in reviews {
-            let metadata = review.metadata()?;
-            if metadata.submitted().is_some() {
+            if review.status()? == ReviewStatus::Submitted {
                 let handle = review.handle();
                 review
                     .remove(force)
