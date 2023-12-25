@@ -1,0 +1,11 @@
+> diff --git a/src/utils.cpp b/src/utils.cpp
+> index b02c16bc3df..fca25d6c839 100644
+> --- a/src/utils.cpp
+> +++ b/src/utils.cpp
+> @@ -1,5 +1,6 @@
+>  #include <algorithm>
+>  #include <array>
+> +#include <climits>
+>  #include <cmath>
+>  #include <cstring>
+>  #include <errno.h>
