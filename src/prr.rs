@@ -439,14 +439,7 @@ impl Prr {
 
         for review in reviews {
             let metadata = review.get_metadata()?;
-            let reviewed = {
-                let (_, review_comment, comments, file_comments) =
-                    review.comments().with_context(|| {
-                        format!("Failed to parse comments for {}", review.path().display())
-                    })?;
-
-                !review_comment.is_empty() || !comments.is_empty() || !file_comments.is_empty()
-            };
+            let reviewed = review.reviewed()?;
             let status = if metadata.submitted().is_some() {
                 "SUBMITTED"
             } else if reviewed {

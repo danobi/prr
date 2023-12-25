@@ -359,6 +359,15 @@ impl Review {
         }
     }
 
+    /// Returns whether or not there exists review comments
+    pub fn reviewed(&self) -> Result<bool> {
+        let (_, review_comment, comments, file_comments) = self
+            .comments()
+            .with_context(|| anyhow!("Failed to parse comments for {}", self.path().display()))?;
+
+        Ok(!review_comment.is_empty() || !comments.is_empty() || !file_comments.is_empty())
+    }
+
     /// Returns path to user-facing review file
     pub fn path(&self) -> PathBuf {
         let mut p = self.workdir.clone();
