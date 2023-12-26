@@ -87,7 +87,7 @@ fn prefix_lines(s: &str, prefix: &str) -> String {
 
     for line in s.lines() {
         if line.is_empty() {
-            ret += prefix;
+            ret += &(prefix.to_owned() + "\n");
         } else {
             // Appending to heap allocated string cannot fail
             writeln!(ret, "{} {}", prefix, line).expect("Failed to write to string");
@@ -232,6 +232,7 @@ impl Review {
         diff: String,
         owner: &str,
         repo: &str,
+        pr_description: Option<String>,
         pr_num: u64,
         commit_id: String,
         force: bool,
@@ -266,14 +267,21 @@ impl Review {
             .truncate(true)
             .open(&review_path)
             .context("Failed to create review file")?;
-        let review_contents = prefix_lines(&diff, ">");
+
+        let mut description = pr_description.unwrap_or_else(String::default);
+        if !description.is_empty() {
+            description += "\n";
+        }
+
+        let original_contents = description + &diff;
+        let prefixed_contents = prefix_lines(&original_contents, ">");
         review_file
-            .write_all(review_contents.as_bytes())
+            .write_all(prefixed_contents.as_bytes())
             .context("Failed to write review file")?;
 
         // Create metadata file
         let metadata = ReviewMetadata {
-            original: diff,
+            original: original_contents,
             submitted: None,
             commit_id: Some(commit_id),
         };
@@ -382,7 +390,7 @@ impl Review {
     /// Replaces all snips (`[...]`s) from `contents` with original, quoted text.
     /// Returns resolved contents as new string.
     fn resolve_snips(&self, contents: &str) -> Result<String> {
-        // First, classify contents into line types. This is henceforce
+        // First, classify contents into line types. This is henceforth
         // known as the "pattern" we want to resolve against original text.
         let pattern: Vec<LineType> = contents.lines().map(LineType::from).collect();
 
@@ -615,6 +623,7 @@ mod tests {
             "some_review_contents".to_string(),
             "some_owner",
             "some_repo",
+            "some_pr_desc".to_string(),
             3,
             "111".to_string(),
             false,

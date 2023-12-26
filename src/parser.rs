@@ -79,6 +79,16 @@ pub enum Comment {
 struct StartState {
     /// Each line of review-level comment is stored as an entry
     comment: Vec<String>,
+
+    /// Only if there was unquoted content in the Start state we should
+    /// send a review comment.  If there was no unquoted content, there
+    /// was no review comment.
+    had_unquoted_content: bool,
+
+    /// After we have seen the prr directive we assume the review
+    /// comment is done. This allows us to ignore the PR description as
+    /// long as we have the prr directive before it.
+    had_review_action: bool,
 }
 
 struct FilePreambleState {
@@ -244,14 +254,25 @@ impl ReviewParser {
         }
 
         match &mut self.state {
+            // we are adding all the lines, regardless if they are
+            // quoted are not because they may be interleaving the
+            // PR description as long as we haven't seen the prr
+            // directive. Once the diff header starts, we determine
+            // whether or not we should send the review comment. The
+            // comment should only be sent, if we ever encountered a
+            // non-quoted string in this state.
             State::Start(state) => {
                 if is_quoted {
                     if !is_diff_header(line) {
-                        bail!("Expected diff header from start state, found '{}'", line);
+                        if !state.had_review_action {
+                            state.comment.push("> ".to_owned() + line);
+                        }
+
+                        return Ok(None);
                     }
 
                     let mut review_comment = None;
-                    if !state.comment.is_empty() {
+                    if state.had_unquoted_content {
                         review_comment =
                             Some(Comment::Review(state.comment.join("\n").trim().to_string()));
                     }
@@ -263,15 +284,19 @@ impl ReviewParser {
 
                     return Ok(review_comment);
                 } else if let Some(d) = is_prr_directive(line) {
+                    state.had_review_action = true;
+
                     return match d {
                         "approve" => Ok(Some(Comment::ReviewAction(ReviewAction::Approve))),
                         "reject" => Ok(Some(Comment::ReviewAction(ReviewAction::RequestChanges))),
                         "comment" => Ok(Some(Comment::ReviewAction(ReviewAction::Comment))),
                         _ => bail!("Unknown @prr directive: {}", d),
                     };
-                } else if !state.comment.is_empty() || !line.trim().is_empty() {
-                    // Only blindly add lines if lines have already been added
+                } else {
                     state.comment.push(line.to_owned());
+                    if !state.had_unquoted_content {
+                        state.had_unquoted_content = true
+                    }
                 }
 
                 Ok(None)

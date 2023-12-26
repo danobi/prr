@@ -230,18 +230,17 @@ impl Prr {
             .await
             .context("Failed to fetch diff")?;
 
-        let commit_id = pr_handler
-            .get(pr_num)
-            .await
-            .context("Failed to fetch commit ID")?
-            .head
-            .sha;
+        let pr = pr_handler.get(pr_num).await.context("Failed to fetch pr")?;
+        let commit_id = pr.head.sha;
+
+        let pr_description = pr.body;
 
         Review::new(
             &self.workdir()?,
             diff,
             owner,
             repo,
+            pr_description,
             pr_num,
             commit_id,
             force,
