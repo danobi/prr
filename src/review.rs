@@ -155,7 +155,7 @@ impl Review {
         fs::create_dir_all(review_dir).context("Failed to create workdir directories")?;
 
         // Check if there are unsubmitted changes
-        if !force && review.status()? == ReviewStatus::Reviewed {
+        if !force && review.has_metadata() && review.status()? == ReviewStatus::Reviewed {
             bail!(
                 "You have unsubmitted changes to the requested review. \
                 Either submit the existing changes, delete the existing review file, \
@@ -351,6 +351,10 @@ impl Review {
         let meta =
             fs::read_to_string(self.metadata_path()).context("Failed to load metadata file")?;
         serde_json::from_str::<ReviewMetadata>(&meta).context("Failed to parse metadata file")
+    }
+
+    fn has_metadata(&self) -> bool {
+        fs::metadata(self.metadata_path()).is_ok()
     }
 
     fn metadata_path(&self) -> PathBuf {
