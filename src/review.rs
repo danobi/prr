@@ -482,4 +482,29 @@ mod tests {
         r.mark_submitted().expect("Failed to submit review");
         assert_eq!(r.status().unwrap(), ReviewStatus::Submitted);
     }
+
+    // Tests creation of a new review
+    #[test]
+    fn test_new_review() {
+        // Create directory structure
+        let dir = tempdir().expect("Failed to create tempdir");
+        let project_dir = dir.path().join("some_owner").join("some_repo");
+        create_dir_all(&project_dir).expect("Failed to create workdir structure");
+
+        // Create a review
+        let review = Review::new(
+            dir.path(),
+            "some_review_contents".to_string(),
+            "some_owner",
+            "some_repo",
+            3,
+            "111".to_string(),
+            false,
+        )
+        .expect("Failed to create new non-existent review");
+
+        // Check on disk "database"
+        fs::metadata(review.path()).expect("Failed to read review file");
+        fs::metadata(review.metadata_path()).expect("Failed to read review file");
+    }
 }
