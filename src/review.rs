@@ -487,13 +487,11 @@ mod tests {
     #[test]
     fn test_new_review() {
         // Create directory structure
-        let dir = tempdir().expect("Failed to create tempdir");
-        let project_dir = dir.path().join("some_owner").join("some_repo");
-        create_dir_all(&project_dir).expect("Failed to create workdir structure");
+        let workdir = tempdir().expect("Failed to create tempdir");
 
         // Create a review
         let review = Review::new(
-            dir.path(),
+            workdir.path(),
             "some_review_contents".to_string(),
             "some_owner",
             "some_repo",
