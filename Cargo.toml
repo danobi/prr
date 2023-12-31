@@ -23,6 +23,7 @@ toml = "0.5"
 xdg = "2.4"
 
 [dev-dependencies]
+pretty_assertions = "1.4.0"
 tempfile = "3.8.1"
 
 [features]

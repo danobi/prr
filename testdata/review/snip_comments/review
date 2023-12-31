@@ -1,0 +1,22 @@
+> diff --git a/src/review.rs b/src/review.rs
+
+
+file comment!
+[...]
+> -        if !force && review.status()? == ReviewStatus::Reviewed {
+> +        if !force && review.has_metadata() && review.status()? == ReviewStatus::Reviewed {
+woah!
+>              bail!(
+>                  "You have unsubmitted changes to the requested review. \
+>                  Either submit the existing changes, delete the existing review file, \
+> @@ -353,6 +353,10 @@ impl Review {
+>          serde_json::from_str::<ReviewMetadata>(&meta).context("Failed to parse metadata file")
+>      }
+[...]
+nice
+
+> +        fs::metadata(self.metadata_path()).is_ok()
+
+sheesh
+
+[...]
