@@ -529,6 +529,7 @@ impl Review {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq as assert_eq_pretty;
     use std::fs::{create_dir_all, File};
     use tempfile::{tempdir, TempDir};
 
@@ -620,5 +621,35 @@ mod tests {
         // Check on disk "database"
         fs::metadata(review.path()).expect("Failed to read review file");
         fs::metadata(review.metadata_path()).expect("Failed to read review file");
+    }
+
+    #[test]
+    fn test_snip_single() {
+        let review = include_str!("../testdata/review/snip_single/review");
+        let gold = include_str!("../testdata/review/snip_single/gold");
+        let metadata = include_str!("../testdata/review/snip_single/metadata");
+
+        let (r, _dir) = setup(review, metadata);
+        assert_eq_pretty!(r.resolve_snips(review).unwrap(), gold);
+    }
+
+    #[test]
+    fn test_snip_multiple() {
+        let review = include_str!("../testdata/review/snip_multiple/review");
+        let gold = include_str!("../testdata/review/snip_multiple/gold");
+        let metadata = include_str!("../testdata/review/snip_multiple/metadata");
+
+        let (r, _dir) = setup(review, metadata);
+        assert_eq_pretty!(r.resolve_snips(review).unwrap(), gold);
+    }
+
+    #[test]
+    fn test_snip_comments() {
+        let review = include_str!("../testdata/review/snip_comments/review");
+        let gold = include_str!("../testdata/review/snip_comments/gold");
+        let metadata = include_str!("../testdata/review/snip_comments/metadata");
+
+        let (r, _dir) = setup(review, metadata);
+        assert_eq_pretty!(r.resolve_snips(review).unwrap(), gold);
     }
 }

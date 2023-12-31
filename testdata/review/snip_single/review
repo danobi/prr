@@ -1,0 +1,11 @@
+> diff --git a/src/review.rs b/src/review.rs
+[...]
+>      }
+>  
+> +    fn has_metadata(&self) -> bool {
+> +        fs::metadata(self.metadata_path()).is_ok()
+> +    }
+> +
+>      fn metadata_path(&self) -> PathBuf {
+>          let mut metadata_path = self.path();
+>          metadata_path.set_file_name(format!(".{}", self.pr_num));
