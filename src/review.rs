@@ -10,6 +10,10 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::parser::{Comment, FileComment, InlineComment, ReviewAction, ReviewParser};
 
+/// We support a few common variants of snips.
+/// These are semantically identical.
+const SNIP_VARIANTS: &[&str] = &["[..]", "[...]"];
+
 /// Represents the state of a single review
 pub struct Review {
     /// Path to workdir
@@ -44,6 +48,16 @@ pub enum ReviewStatus {
     Submitted,
 }
 
+/// Represents a single line in a review file.
+enum LineType<'a> {
+    /// Original text (but stored without the leading `> `)
+    Quoted(&'a str),
+    /// A snip (`[..]`)
+    Snip,
+    /// User supplied comment
+    Comment(&'a str),
+}
+
 impl Display for ReviewStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt_result {
         let text = match self {
@@ -53,6 +67,18 @@ impl Display for ReviewStatus {
         };
 
         write!(f, "{text}")
+    }
+}
+
+impl<'a> From<&'a str> for LineType<'a> {
+    fn from(line: &'a str) -> Self {
+        if let Some(text) = line.strip_prefix("> ") {
+            Self::Quoted(text)
+        } else if SNIP_VARIANTS.contains(&line.trim()) {
+            Self::Snip
+        } else {
+            Self::Comment(line)
+        }
     }
 }
 
@@ -123,6 +149,76 @@ pub fn get_all_existing(workdir: &Path) -> Result<Vec<Review>> {
     }
 
     Ok(ret)
+}
+
+/// Recursive helper for `resolve_snips()`.
+///
+/// This function will return Some(lines), where lines is a Vec of resolved
+/// lines. There should not be any trailing newlines in `lines`.
+///
+/// The problem of resolving snips transposes pretty cleanly to the classic
+/// glob matching algorithm. We implement the glob matching fairly naively
+/// using recursion b/c it's cleaner to recurse when we want to eventually
+/// return a value.
+///
+/// This would be in contrast to rsc's glob algorithm [0] where it's more
+/// efficient and has less pathological corner cases. We choose to trade off
+/// performance for simplicity here.
+///
+/// [0]: https://research.swtch.com/glob
+fn resolve_snips_recurse<'a>(pattern: &[LineType<'a>], text: &[&'a str]) -> Option<Vec<String>> {
+    let mut resolved = Vec::new();
+    let mut pattern_idx = 0;
+    let mut text_idx = 0;
+    while pattern_idx < pattern.len() || text_idx < text.len() {
+        if pattern_idx < pattern.len() {
+            match pattern[pattern_idx] {
+                LineType::Quoted(line) => {
+                    if text_idx < text.len() && text[text_idx] == line {
+                        resolved.push(format!("> {line}"));
+                        pattern_idx += 1;
+                        text_idx += 1;
+                        continue;
+                    }
+                }
+                // Comments are semantically irrelevant to snip resolution. But we still
+                // need to account for them in returned output.
+                LineType::Comment(line) => {
+                    resolved.push(line.to_string());
+                    pattern_idx += 1;
+                    continue;
+                }
+                // Begin glob logic
+                LineType::Snip => {
+                    // Here we try making the snip consume 0 lines, 1 line, and so forth.
+                    //
+                    // Skipping comments is technically a noop and in theory we could rework
+                    // this code to only skip matchable text. But that is just an optimization.
+                    for cand_text_idx in text_idx..=text.len() {
+                        let cand_pattern = &pattern[pattern_idx + 1..];
+                        let cand_text = &text[cand_text_idx..];
+                        if let Some(mut r) = resolve_snips_recurse(cand_pattern, cand_text) {
+                            let skipped: Vec<String> = text[text_idx..cand_text_idx]
+                                .iter()
+                                .map(|&line| format!("> {line}"))
+                                .collect();
+                            resolved.extend_from_slice(&skipped);
+                            resolved.append(&mut r);
+                            return Some(resolved);
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we reach here, we either have some `pattern` or `text` still left to
+        // process. Meaning one ran out before the other. Which implies a resolution
+        // failure.
+        return None;
+    }
+
+    // We've finished processing all of `text` and `pattern`. So resolution success.
+    Some(resolved)
 }
 
 impl Review {
@@ -213,7 +309,8 @@ impl Review {
     ///
     /// Returns (overall review action, overall review comment, inline comments, file comments)
     pub fn comments(&self) -> Result<(ReviewAction, String, Vec<InlineComment>, Vec<FileComment>)> {
-        let contents = fs::read_to_string(self.path()).context("Failed to read review file")?;
+        let raw = fs::read_to_string(self.path()).context("Failed to read review file")?;
+        let contents = self.resolve_snips(&raw)?;
         self.validate_review_file(&contents)?;
 
         let mut parser = ReviewParser::new();
@@ -280,6 +377,25 @@ impl Review {
             .context("Failed to write metadata file")?;
 
         Ok(())
+    }
+
+    /// Replaces all snips (`[...]`s) from `contents` with original, quoted text.
+    /// Returns resolved contents as new string.
+    fn resolve_snips(&self, contents: &str) -> Result<String> {
+        // First, classify contents into line types. This is henceforce
+        // known as the "pattern" we want to resolve against original text.
+        let pattern: Vec<LineType> = contents.lines().map(LineType::from).collect();
+
+        // Next, store original text as lines. It's easier to index into this way.
+        // The original text here is unquoted.
+        let original = self.metadata()?.original;
+        let text: Vec<&str> = original.lines().collect();
+
+        Ok(resolve_snips_recurse(&pattern, &text)
+            .ok_or_else(|| anyhow!("Failed to resolve snips. Did you corrupt quoted text?"))?
+            .iter()
+            .map(|line| format!("{line}\n"))
+            .collect())
     }
 
     /// Validates whether the user corrupted the quoted contents
