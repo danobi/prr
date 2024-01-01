@@ -22,7 +22,7 @@
     - [x] Maybe even check mtime between review file and submission time?
 - [x] Support parsing github url from stdin
 - [x] Save commit hash of downloaded review file
-- [ ] Support [...] snipping
+- [x] Support [...] snipping
 - [ ] Support comment threads. Maybe do nested '>'s like actual mailing lists?
 
 # Thoughts

@@ -117,6 +117,14 @@ inline comment.
 
 [Example](examples/spanned_inline_comment.prr)
 
+#### Snips
+
+Description: Use `[...]` to replace (ie. snip) contiguous quoted lines.
+
+Syntax: `[...]` or `[..]` on its own line. Multiple snips may be used in a review file.
+
+[Example](examples/snip.prr)
+
 #### Review directives
 
 Description: Meta-directives to give to `prr` in review comment. Currently
