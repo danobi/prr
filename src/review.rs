@@ -528,10 +528,13 @@ impl Review {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use pretty_assertions::assert_eq as assert_eq_pretty;
+    use std::collections::VecDeque;
     use std::fs::{create_dir_all, File};
+
+    use pretty_assertions::assert_eq as assert_eq_pretty;
     use tempfile::{tempdir, TempDir};
+
+    use super::*;
 
     fn setup(review: &str, metadata: &str) -> (Review, TempDir) {
         let dir = tempdir().expect("Failed to create tempdir");
@@ -651,5 +654,48 @@ mod tests {
 
         let (r, _dir) = setup(review, metadata);
         assert_eq_pretty!(r.resolve_snips(review).unwrap(), gold);
+    }
+
+    // Here we exhaustively check all possible single snips. It may be worth doing something
+    // similar for multiple snips but it'll be a bit more complicated to implement.
+    #[test]
+    fn test_snip_single_exhaustive() {
+        let gold = include_str!("../testdata/review/snip_single/gold");
+        let metadata = include_str!("../testdata/review/snip_single/metadata");
+        let (r, _dir) = setup("", metadata);
+
+        let nr_lines = gold.lines().count();
+
+        for position in 0..=nr_lines {
+            for length in 0..=nr_lines {
+                let mut lines: VecDeque<&str> = gold.lines().collect();
+                let mut contents = String::new();
+                let mut idx = 0;
+
+                while !lines.is_empty() {
+                    if idx == position {
+                        writeln!(&mut contents, "[...]").unwrap();
+                        for _ in 0..length {
+                            lines.pop_front();
+                            idx += 1;
+                        }
+                    }
+
+                    // A snip appended to gold file will go past "end" of lines
+                    if let Some(line) = lines.pop_front() {
+                        writeln!(&mut contents, "{line}").unwrap();
+                    }
+
+                    idx += 1;
+                }
+
+                // Handle 0 length trailing snip
+                if idx == position {
+                    writeln!(&mut contents, "[...]").unwrap();
+                }
+
+                assert_eq_pretty!(r.resolve_snips(&contents).unwrap(), gold);
+            }
+        }
     }
 }
