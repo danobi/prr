@@ -1,4 +1,4 @@
-# Github
+# Acquire Github token
 
 `prr` needs a token so it can make Github API calls on your behalf.
 

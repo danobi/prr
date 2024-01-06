@@ -1,4 +1,4 @@
-# Binary
+# Install binary
 
 There are multiple ways to install `prr` CLI tool. Choose any one of the
 methods below that best suit your needs.

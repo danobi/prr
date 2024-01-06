@@ -74,12 +74,8 @@ file, it must be fully specified and will override the global config file.
 The following local configuration options are supported:
 
 * `[local]`
-    * [`repository`](#the-repository-field): A string in format of `${ORG}/${REPO}` (optional)
-        * If specified, you may omit the `${ORG}/${REPO}` from PR string arguments.
-          For example, you may run `prr get 6` instead of `prr get danobi/prr/6`.
-    * [`workdir`](#the-local-workdir-field): Local workdir override (optional)
-        * See `prr.workdir`
-        * Relative paths are interpreted as relative to the local config file
+    * [`repository`](#the-repository-field)
+    * [`workdir`](#the-local-workdir-field)
 
 ### The `repository` field
 
