@@ -41,6 +41,12 @@ struct PrrConfig {
     ///
     /// Useful for enterprise instances with custom URLs
     url: Option<String>,
+
+    /// Activate experimental PR metadata support. Currently this option
+    /// just activates downloading the actual PR description in addition
+    /// to the diff.
+    #[serde(default)]
+    activate_pr_metadata_experiment: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -175,6 +181,10 @@ impl Prr {
         Ok(xdg_dirs.get_data_home())
     }
 
+    pub fn is_pr_metadata_experiment_active(&self) -> bool {
+        self.config.prr.activate_pr_metadata_experiment
+    }
+
     /// Parses a PR string in the form of `danobi/prr/24` and returns
     /// a tuple ("danobi", "prr", 24) or an error if string is malformed.
     /// If the local repository config is defined, it just needs the PR number.
@@ -233,7 +243,10 @@ impl Prr {
         let pr = pr_handler.get(pr_num).await.context("Failed to fetch pr")?;
         let commit_id = pr.head.sha;
 
-        let pr_description = pr.body;
+        let mut pr_description = None;
+        if self.is_pr_metadata_experiment_active() {
+            pr_description = Some(pr.body.unwrap_or("".to_string()));
+        }
 
         Review::new(
             &self.workdir()?,

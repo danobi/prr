@@ -19,6 +19,7 @@ The following global configuration options are supported:
     * [`token`](#the-token-field)
     * [`workdir`](#the-workdir-field)
     * [`url`](#the-url-field)
+    * [`activate_pr_metadata_experiment`](#the-activate-pr-metadata-experiment-field)
 
 ### The `token` field
 
@@ -59,6 +60,23 @@ Example:
 ```toml
 [prr]
 url = "https://github.company.com/api/v3"
+```
+
+### The `activate_pr_metadata_experiment` field
+
+The optional `activate_pr_metadata_experiment` field determines whether,
+prr is downloading the PR description as well as the diff of the PR. Note
+that the effect as well as the name of this option may change in the
+future.
+
+If this is not explicitly set to "true", it is considered to be set to
+"false".
+
+Example:
+
+```toml
+[prr]
+activate_pr_metadata_experiment = true
 ```
 
 ## Local configuration
