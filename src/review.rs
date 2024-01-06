@@ -632,7 +632,7 @@ mod tests {
             "some_review_contents".to_string(),
             "some_owner",
             "some_repo",
-            "some_pr_desc".to_string(),
+            Some("some_pr_desc".to_string()),
             3,
             "111".to_string(),
             false,
