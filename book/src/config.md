@@ -1,1 +1,115 @@
 # Configuration
+
+`prr` supports two types of configuration: global and local.
+
+Global configuration controls global behavior. Local configuration controls
+behavior for the directory the configuration is in as well as its
+subdirectories.
+
+`prr` respects the [XDG Base Directory Specification][0] where possible.
+
+## Global configuration
+
+`prr` reads global configuration from both `prr --config` as well as
+`$XDG_CONFIG_HOME/prr/config.toml`. It places priority on the `--config` flag.
+
+The following global configuration options are supported:
+
+* `[prr]`
+    * [`token`](#the-token-field)
+    * [`workdir`](#the-workdir-field)
+    * [`url`](#the-url-field)
+
+### The `token` field
+
+The required `token` field is your Github Peronal Authentical Token as a
+string.
+
+Example:
+
+```toml
+[prr]
+token = "ghp_Kuzzzzzzzzzzzzdonteventryzzzzzzzzzzz"
+```
+
+### The `workdir` field
+
+The optional `workdir` field takes a path in string form.
+
+Review files and metadata will be placed here. Note `~` and `$HOME` do not
+expand. Paths must also be absolute.
+
+If omitted, `workdir` defaults to `$XDG_DATA_HOME/prr`.
+
+Example:
+
+```toml
+[prr]
+workdir = "/home/dxu/dev/review"
+```
+
+### The `url` field
+
+The optional `url` field takes a URL to the Github API in string form.
+
+This is useful for Github Enterprise deployments where the API endpoint is non-standard.
+
+Example:
+
+```toml
+[prr]
+url = "https://github.company.com/api/v3"
+```
+
+## Local configuration
+
+Local config files must be named `.prr.toml` and will be searched for starting
+from the current working directory up every parent directory until either the
+first match or the root directory is hit. Local config files override values in
+the global config in some cases.
+
+If the [`[prr]`](#global-configuration) table is provided in a local config
+file, it must be fully specified and will override the global config file.
+
+The following local configuration options are supported:
+
+* `[local]`
+    * [`repository`](#the-repository-field): A string in format of `${ORG}/${REPO}` (optional)
+        * If specified, you may omit the `${ORG}/${REPO}` from PR string arguments.
+          For example, you may run `prr get 6` instead of `prr get danobi/prr/6`.
+    * [`workdir`](#the-local-workdir-field): Local workdir override (optional)
+        * See `prr.workdir`
+        * Relative paths are interpreted as relative to the local config file
+
+### The `repository` field
+
+The optional `repository` field takes a string in format of
+`${ORG}/${REPO}`.
+
+If specified, you may omit the `${ORG}/${REPO}` from PR string arguments.
+For example, you may run `prr get 6` instead of `prr get danobi/prr/6`.
+
+
+Example:
+
+```toml
+[local]
+repository = "danobi/prr"
+```
+
+### The local `workdir` field
+
+The optional `workdir` field takes a string that represents a path.
+
+The semantics are the same as [prr.workdir](#the-workdir-field) with the
+following exception: in contrast to global workdir, relative local workdir
+paths are interpreted as relative to the local config file.
+
+Example:
+
+```toml
+[local]
+repository = ".prr"
+```
+
+[0]: https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
