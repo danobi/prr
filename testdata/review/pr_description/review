@@ -1,0 +1,21 @@
+Not necessary but seems ok.
+
+@prr approve
+
+> This is just for testing purposes.
+> diff --git a/README.md b/README.md
+> index eda592e..ba84732 100644
+> --- a/README.md
+> +++ b/README.md
+> @@ -1,5 +1,5 @@
+> -MA-FSA for Go
+> -=============
+> +MA-FSA for Golang
+> +=================
+
+Doesn't seem necessary ...
+
+
+>  
+>  Package mafsa implements Minimal Acyclic Finite State Automata (MA-FSA)
+>  with Minimal Perfect Hashing (MPH). Basically, it's a set of strings that

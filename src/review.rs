@@ -620,6 +620,26 @@ mod tests {
         assert_eq!(r.status().unwrap(), ReviewStatus::Submitted);
     }
 
+    #[test]
+    fn test_review_validation_with_pr_description() {
+        let review = include_str!("../testdata/review/pr_description/review");
+        let metadata = include_str!("../testdata/review/pr_description/metadata");
+        let (r, _dir) = setup(review, metadata);
+
+        r.validate_review_file(review)
+            .expect("Failed to validate review file with PR description");
+    }
+
+    #[test]
+    fn test_review_validation_with_interleaving_pr_description() {
+        let review = include_str!("../testdata/review/pr_description_interleaving/review");
+        let metadata = include_str!("../testdata/review/pr_description_interleaving/metadata");
+        let (r, _dir) = setup(review, metadata);
+
+        r.validate_review_file(review)
+            .expect("Failed to validate review file with interleaving PR description");
+    }
+
     // Tests creation of a new review
     #[test]
     fn test_new_review() {
