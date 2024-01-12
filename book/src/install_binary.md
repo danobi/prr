@@ -15,7 +15,7 @@ install `prr`:
 cargo install prr
 ```
 
-This will automatically download mdBook from [crates.io][1], build it, and
+This will automatically download `prr` from [crates.io][1], build it, and
 install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 
 To uninstall, run the command:
