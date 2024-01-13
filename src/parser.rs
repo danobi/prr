@@ -835,4 +835,38 @@ mod tests {
         assert_eq!(captures.name("lstart").unwrap().as_str(), "5");
         assert!(captures.name("llen").is_none());
     }
+
+    #[test]
+    fn inline_and_review_comments_with_pr_description_present() {
+        let input = include_str!("../testdata/inline_and_review_comments_with_pr_description");
+        let expected = vec![
+            Comment::ReviewAction(ReviewAction::RequestChanges),
+            Comment::Review("Not necessary.".to_string()),
+            Comment::Inline(InlineComment {
+                file: "README.md".to_string(),
+                line: LineLocation::Right(2),
+                start_line: None,
+                comment: "Doesn't seem necessary ...".to_string(),
+            }),
+        ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn review_comments_interleaved_with_pr_description() {
+        let input = include_str!("../testdata/review_comments_interleaved_with_pr_description");
+        let expected = vec![
+            Comment::ReviewAction(ReviewAction::RequestChanges),
+            Comment::Review("Not necessary.\n\n\n> This is just for testing purposes.\n\nThis might be fine or not.".to_string()),
+            Comment::Inline(InlineComment {
+                file: "README.md".to_string(),
+                line: LineLocation::Right(2),
+                start_line: None,
+                comment: "Doesn't seem necessary ...".to_string(),
+            }),
+        ];
+
+        test(input, &expected);
+    }
 }
