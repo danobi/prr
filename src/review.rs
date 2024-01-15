@@ -386,6 +386,15 @@ impl Review {
         // known as the "pattern" we want to resolve against original text.
         let pattern: Vec<LineType> = contents.lines().map(LineType::from).collect();
 
+        // If the review file does not have any snips, just skip snip resolution.
+        //
+        // We do this so user gets more informative error message thru validate_review_file()
+        // if they corrupted a quoted line. If we naively (and more efficiently) always
+        // try to resolve snips, they might get the less informative error below.
+        if !pattern.iter().any(|line| matches!(line, LineType::Snip)) {
+            return Ok(contents.to_string());
+        }
+
         // Next, store original text as lines. It's easier to index into this way.
         // The original text here is unquoted.
         let original = self.metadata()?.original;
