@@ -17,6 +17,7 @@
 - [Review file markups](./review.md)
     - [Prr directive example](./examples/prr_directive.md)
     - [Review comment example](./examples/review_comment.md)
+    - [Description comment example](./examples/description_comment.md)
     - [Inline comment example](./examples/inline_comment.md)
     - [Spanned inline comment example](./examples/spanned_inline_comment.md)
     - [File comment example](./examples/file_comment.md)

@@ -19,6 +19,18 @@ Syntax: Non-whitespace, non-quoted text at the beginning of the review file.
 
 [Example](./examples/review_comment.md)
 
+## Description comment
+
+Description: Specialized form of review comment. When
+[`activate_pr_metadata_experiment`](./config.md#the-activate_pr_metadata_experiment-field)
+is active, review files come with the PR description quoted at the top of the
+review file. Comments, when uploaded, will quote the preceding description. PR
+description will continue to be quoted until a review directive is found.
+
+Syntax: Same as review comment.
+
+[Example](./examples/review_description.md)
+
 ## Inline comment
 
 Description: Inline comment attached to a specific line of the diff.
