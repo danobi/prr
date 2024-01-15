@@ -19,7 +19,7 @@ The following global configuration options are supported:
     * [`token`](#the-token-field)
     * [`workdir`](#the-workdir-field)
     * [`url`](#the-url-field)
-    * [`activate_pr_metadata_experiment`](#the-activate-pr-metadata-experiment-field)
+    * [`activate_pr_metadata_experiment`](#the-activate_pr_metadata_experiment-field)
 
 ### The `token` field
 
