@@ -425,22 +425,25 @@ impl Prr {
         }
     }
 
-    pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64) -> Result<()> {
+    pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64, apply_repo: &Path) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
         let diff = Diff::from_buffer(review.diff()?.as_bytes()).context("Failed to load diff")?;
-        let repo = Repository::open_from_env().context("Failed to open git repository")?;
+        let apply_repo_path = Path::new(apply_repo);
+        let apply_repo =
+            Repository::open(apply_repo_path).context("Failed to open git repository")?;
 
         // Best effort check to prevent clobbering any work in progress
         let mut opts = StatusOptions::new();
         opts.include_ignored(false);
-        let statuses = repo
+        let statuses = apply_repo
             .statuses(Some(&mut opts))
             .context("Failed to get repo status")?;
         if !statuses.is_empty() {
             bail!("Working directory is dirty");
         }
 
-        repo.apply(&diff, ApplyLocation::WorkDir, None)
+        apply_repo
+            .apply(&diff, ApplyLocation::WorkDir, None)
             .context("Failed to apply diff")
     }
 
