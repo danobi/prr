@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
         }
         Command::Apply { pr } => {
             let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
-            prr.apply_pr(&owner, &repo, pr_num)?;
+            prr.apply_pr(&owner, &repo, pr_num, Path::new("./"))?;
         }
         Command::Status { no_titles } => {
             prr.print_status(no_titles)?;
