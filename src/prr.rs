@@ -685,4 +685,85 @@ mod tests {
         let (prr, _dir) = config(gconfig, None);
         assert!(prr.workdir().is_err());
     }
+
+    fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) {
+        fs::create_dir_all(&dst).expect("could not create_dir_all");
+        for entry in fs::read_dir(src).expect("could not read_dir") {
+            let entry = entry.expect("entry is not valid");
+            let ty = entry.file_type().expect("cannot get filetype");
+            if ty.is_dir() {
+                copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()));
+            } else {
+                fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))
+                    .expect("copy in copy_dir_all failed");
+            }
+        }
+    }
+
+    #[test]
+    fn test_apply_pr() {
+        let gconfig = r#"
+             [prr]
+             token = "doesn'tmatter"
+             workdir = "doesn'tmatter"
+         "#;
+        let lconfig = r#"
+             [local]
+             workdir = "testdata/"
+         "#;
+
+        let (prr, dir) = config(gconfig, Some(lconfig));
+        let test_review_path =
+            dir.path().to_str().expect("tmp path invalid").to_string() + "/testdata/apply_pr";
+        fs::create_dir_all(&test_review_path).expect("failed to create temp directory");
+        copy_dir_all("testdata/review/apply_pr", &test_review_path);
+
+        let test_repo_path = dir.path().to_str().unwrap().to_string() + "/testgitrepo/";
+        fs::create_dir_all(&test_repo_path).expect("couldn't create testgitrepo");
+        let test_repo = git2::Repository::init(&test_repo_path).expect("couldn't init testgitrepo");
+
+        std::fs::copy(
+            "testdata/testgitrepo/README.md",
+            test_repo_path.clone() + "README.md",
+        )
+        .expect("copy README.md failed");
+
+        let mut index = test_repo.index().expect("couldn't get repo index");
+        index
+            .add_path(Path::new("README.md"))
+            .expect("couldn't add path");
+
+        let new_tree_oid = index.write_tree().expect("couldn't write tree");
+        index.write().expect("couldn't write index");
+
+        let signature = git2::Signature::now("someone", "someone@somewhere.com")
+            .expect("failed to create signature");
+        let new_tree = test_repo.find_tree(new_tree_oid).unwrap();
+        test_repo
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "Initial commit",
+                &new_tree,
+                &[],
+            )
+            .expect("failed to commit");
+
+        // add non-tracked file for testing purposes
+        std::fs::copy(
+            "testdata/testgitrepo/README.md",
+            test_repo_path.clone() + "README-not-tracked.md",
+        )
+        .expect("copy README-not-tracked.md failed");
+
+        prr.apply_pr("apply_pr", "review", 1, Path::new(&test_repo_path))
+            .expect("apply_pr failed");
+
+        let got_after_apply = fs::read(test_repo_path.clone() + "README.md")
+            .expect("failed to read README.md with diff applied");
+        let want_after_apply = fs::read("testdata/testgitrepo/README-applied.md")
+            .expect("failed to read README-applied.md");
+        assert_eq!(got_after_apply, want_after_apply);
+    }
 }
