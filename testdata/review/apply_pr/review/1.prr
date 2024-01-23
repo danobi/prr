@@ -1,0 +1,12 @@
+> Much better this way!
+> 
+> diff --git a/README.md b/README.md
+> index 007306a..1a480f2 100644
+> --- a/README.md
+> +++ b/README.md
+> @@ -1,4 +1,4 @@
+>  For testing
+>  ===========
+>  
+> -This is a readme
+> +This is a better readme line!
