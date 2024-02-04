@@ -32,7 +32,15 @@ This is a spanned inline comment attached to passages 2 through 4.
 > +adsf
 > +
 
-This is another spanned comment attached to the newly added text.
+This is another spanned comment attached to the newly added text, that GitHub will interpret as a [code suggestion](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/incorporating-feedback-in-your-pull-request), suggesting the added text be removed.
+
+```suggestion
+-asdf
+-asdf
+-asdf
+-adsf
+-
+```
 
 >  17. Therefore in chariot fighting, when ten or more chariots have been taken, those should be rewarded who took the first. Our own flags should be substituted for those of the enemy, and the chariots mingled and used in conjunction with ours. The captured soldiers should be kindly treated and kept. 
 >  
