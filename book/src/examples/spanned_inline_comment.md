@@ -36,11 +36,6 @@
     be removed.
 
     ```suggestion
-    -asdf
-    -asdf
-    -asdf
-    -adsf
-    -
     ```
 
     [0]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/incorporating-feedback-in-your-pull-request
