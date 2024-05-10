@@ -3,7 +3,7 @@ name = "prr"
 description = "Mailing list style code reviews for github"
 license-file = "LICENSE"
 repository = "https://github.com/danobi/prr"
-version = "0.17.0"
+version = "0.18.0"
 edition = "2021"
 
 [dependencies]
