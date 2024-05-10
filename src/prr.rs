@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use git2::{ApplyLocation, Diff, Repository, StatusOptions};
+use http::{StatusCode, Uri};
 use lazy_static::lazy_static;
 use octocrab::Octocrab;
 use prettytable::{format, row, Table};
-use reqwest::StatusCode;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
@@ -125,7 +125,7 @@ impl Prr {
 
         let octocrab = Octocrab::builder()
             .personal_token(config.prr.token.clone())
-            .base_url(config.url())
+            .base_uri(config.url())
             .context("Failed to parse github base URL")?
             .build()
             .context("Failed to create GH client")?;
@@ -347,16 +347,17 @@ impl Prr {
         body: &Value,
     ) -> Result<()> {
         let path = format!("repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
-        match self
-            .crab
-            ._post(self.crab.absolute_url(path)?, Some(body))
-            .await
-        {
+        let uri = Uri::builder()
+            .path_and_query(path)
+            .build()
+            .context("Invalid URI")?;
+        match self.crab._post(uri, Some(body)).await {
             Ok(resp) => {
                 let status = resp.status();
                 if status != StatusCode::OK {
-                    let text = resp
-                        .text()
+                    let text = self
+                        .crab
+                        .body_to_string(resp)
                         .await
                         .context("Failed to decode failed response")?;
                     bail!("Error during POST: Status code: {}, Body: {}", status, text);
@@ -396,16 +397,17 @@ impl Prr {
             "subject_type": "file",
         });
         let path = format!("repos/{}/{}/pulls/{}/comments", owner, repo, pr_num);
-        match self
-            .crab
-            ._post(self.crab.absolute_url(path)?, Some(&body))
-            .await
-        {
+        let uri = Uri::builder()
+            .path_and_query(path)
+            .build()
+            .context("Invalid URI")?;
+        match self.crab._post(uri, Some(&body)).await {
             Ok(resp) => {
                 let status = resp.status();
                 if status != StatusCode::CREATED {
-                    let text = resp
-                        .text()
+                    let text = self
+                        .crab
+                        .body_to_string(resp)
                         .await
                         .context("Failed to decode failed response")?;
                     bail!("Error during POST: Status code: {}, Body: {}", status, text);
@@ -541,8 +543,8 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_parse_basic_pr_str() {
+    #[tokio::test]
+    async fn test_parse_basic_pr_str() {
         let pr_ref = "example/prr/42";
         assert_eq!(
             PRR.0.parse_pr_str(pr_ref).unwrap(),
@@ -550,8 +552,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_parse_dotted_pr_str() {
+    #[tokio::test]
+    async fn test_parse_dotted_pr_str() {
         let pr_ref = "example/prr.test/42";
         assert_eq!(
             PRR.0.parse_pr_str(pr_ref).unwrap(),
@@ -559,8 +561,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_parse_underscored_pr_str() {
+    #[tokio::test]
+    async fn test_parse_underscored_pr_str() {
         let pr_ref = "example/prr_test/42";
         assert_eq!(
             PRR.0.parse_pr_str(pr_ref).unwrap(),
@@ -568,8 +570,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_parse_dashed_pr_str() {
+    #[tokio::test]
+    async fn test_parse_dashed_pr_str() {
         let pr_ref = "example/prr-test/42";
         assert_eq!(
             PRR.0.parse_pr_str(pr_ref).unwrap(),
@@ -577,8 +579,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_parse_numbered_pr_str() {
+    #[tokio::test]
+    async fn test_parse_numbered_pr_str() {
         let pr_ref = "example/prr1/42";
         assert_eq!(
             PRR.0.parse_pr_str(pr_ref).unwrap(),
@@ -586,8 +588,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_parse_mixed_pr_str() {
+    #[tokio::test]
+    async fn test_parse_mixed_pr_str() {
         let pr_ref = "example/prr1.test_test-/42";
         assert_eq!(
             PRR.0.parse_pr_str(pr_ref).unwrap(),
@@ -595,8 +597,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_local_config_repository() {
+    #[tokio::test]
+    async fn test_local_config_repository() {
         let gconfig = r#"
             [prr]
             token = "test"
@@ -613,8 +615,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_global_workdir() {
+    #[tokio::test]
+    async fn test_global_workdir() {
         let gconfig = r#"
             [prr]
             token = "test"
@@ -625,8 +627,8 @@ mod tests {
         assert_eq!(prr.workdir().unwrap(), Path::new("/globalworkdir"))
     }
 
-    #[test]
-    fn test_local_workdir() {
+    #[tokio::test]
+    async fn test_local_workdir() {
         let gconfig = r#"
             [prr]
             token = "test"
@@ -640,8 +642,8 @@ mod tests {
         assert_eq!(prr.workdir().unwrap(), Path::new("/localworkdir"))
     }
 
-    #[test]
-    fn test_local_workdir_relative() {
+    #[tokio::test]
+    async fn test_local_workdir_relative() {
         let gconfig = r#"
             [prr]
             token = "test"
@@ -658,8 +660,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_local_workdir_override() {
+    #[tokio::test]
+    async fn test_local_workdir_override() {
         let gconfig = r#"
             [prr]
             token = "test"
@@ -674,8 +676,8 @@ mod tests {
         assert_eq!(prr.workdir().unwrap(), Path::new("/localworkdir"))
     }
 
-    #[test]
-    fn test_invalid_relative_workdir() {
+    #[tokio::test]
+    async fn test_invalid_relative_workdir() {
         let gconfig = r#"
             [prr]
             token = "test"
@@ -700,8 +702,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_apply_pr() {
+    #[tokio::test]
+    async fn test_apply_pr() {
         let gconfig = r#"
              [prr]
              token = "doesn'tmatter"
