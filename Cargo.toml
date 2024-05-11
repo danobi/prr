@@ -1,10 +1,11 @@
 [package]
 name = "prr"
 description = "Mailing list style code reviews for github"
-license-file = "LICENSE"
+license = "GPL-2.0-or-later"
 repository = "https://github.com/danobi/prr"
 version = "0.18.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 anyhow = "1.0"
@@ -25,6 +26,12 @@ xdg = "2.4"
 [dev-dependencies]
 pretty_assertions = "1.4.0"
 tempfile = "3.8.1"
+
+[build-dependencies]
+anyhow = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+clap_mangen = { version = "0.2.20", optional = true }
+clap_complete = { version = "4.5.2", optional = true }
 
 [features]
 # Statically link a vendored copy OpenSSL. OpenSSL is used by all of `git2`, `reqwest` and
