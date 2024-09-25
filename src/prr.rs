@@ -477,7 +477,7 @@ impl Prr {
     pub async fn remove(&self, prs: &[String], force: bool, submitted: bool) -> Result<()> {
         for pr in prs {
             let (owner, repo, pr_num) = self.parse_pr_str(pr)?;
-            let review = self.get_pr(&owner, &repo, pr_num, force).await?;
+            let review = self.get_review(&owner, &repo, pr_num)?;
             review
                 .remove(force)
                 .with_context(|| anyhow!("Failed to remove {}", pr))?;
