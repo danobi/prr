@@ -24,21 +24,15 @@ fn main() -> std::io::Result<()> {
             .about("Mailing list style code reviews for GitHub")
             .long_about(LONG_ABOUT);
 
-        #[cfg(feature = "clap_mangen")]
-        {
-            let man_dir = std::path::Path::join(&out_dir, "man");
-            std::fs::create_dir_all(&man_dir)?;
-            clap_mangen::generate_to(cmd.clone(), &man_dir)?;
-        }
+        let man_dir = std::path::Path::join(&out_dir, "man");
+        std::fs::create_dir_all(&man_dir)?;
+        clap_mangen::generate_to(cmd.clone(), &man_dir)?;
 
-        #[cfg(feature = "clap_complete")]
-        {
-            use clap::ValueEnum;
-            let completions_dir = std::path::Path::join(&out_dir, "completions");
-            std::fs::create_dir_all(&completions_dir)?;
-            for shell in clap_complete::Shell::value_variants() {
-                clap_complete::generate_to(*shell, &mut cmd, "prr", &completions_dir)?;
-            }
+        use clap::ValueEnum;
+        let completions_dir = std::path::Path::join(&out_dir, "completions");
+        std::fs::create_dir_all(&completions_dir)?;
+        for shell in clap_complete::Shell::value_variants() {
+            clap_complete::generate_to(*shell, &mut cmd, "prr", &completions_dir)?;
         }
     }
 
@@ -47,8 +41,6 @@ fn main() -> std::io::Result<()> {
         std::env::var("TARGET").unwrap()
     );
     println!("cargo:rerun-if-env-changed=GEN_DIR");
-    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CLAP_MANGEN");
-    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CLAP_COMPLETE");
 
     Ok(())
 }
