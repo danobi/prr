@@ -119,7 +119,7 @@ Please remove this text!
 Here we've done two things:
 
 1. Create a "spanned inline" comment that attaches our comment to a block of
-   lines. If we ommitted the leading newline, we would have a regular "inline"
+   lines. If we omitted the leading newline, we would have a regular "inline"
    comment that attaches to the most immediately quoted line. Using spanned
    inline comments can be useful when we want to be precise during review.
 1. Snip the trailing text. We didn't have to do this, but it makes the example

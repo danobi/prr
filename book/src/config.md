@@ -23,7 +23,7 @@ The following global configuration options are supported:
 
 ### The `token` field
 
-The required `token` field is your Github Peronal Authentical Token as a
+The required `token` field is your Github Personal Authentical Token as a
 string.
 
 Example:
