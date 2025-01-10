@@ -213,7 +213,7 @@ fn parse_hunk_start(line: &str) -> Result<Option<(u64, u64)>> {
             .context("Failed to parse hunk start right line")?;
         // Note that for newly added files or deleted files, both sides
         // of the line info might be zero. `saturating_*` operations must hence
-        // be used for the following substraction to be safe.
+        // be used for the following subtraction to be safe.
 
         return Ok(Some((hunk_start_line_left, hunk_start_line_right)));
     }
