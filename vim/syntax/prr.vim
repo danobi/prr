@@ -26,8 +26,8 @@ syn keyword prrResult approve reject comment
 
 " Define the default highlighting.
 " Only used when an item doesn't have highlighting yet
-hi def link prrAdded           Identifier
-hi def link prrRemoved         Special
+hi def link prrAdded           Added
+hi def link prrRemoved         Removed
 
 hi def link prrTagName Keyword
 hi def link prrResult String
