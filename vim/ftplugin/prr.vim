@@ -15,4 +15,4 @@ function! DiffFoldLevel()
     endif
 endfunction
 
-let b:undo_ftplugin = 'setl fdm&'
+let b:undo_ftplugin = 'setl fdm< | setl fde< | setl fdc<'
