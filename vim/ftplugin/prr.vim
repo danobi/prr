@@ -1,9 +1,9 @@
 setlocal foldmethod=expr
-setlocal foldexpr=DiffFoldLevel()
+setlocal foldexpr=s:DiffFoldLevel()
 setlocal foldcolumn=3
 
 " Adapted from https://github.com/sgeb/vim-diff-fold
-function! DiffFoldLevel()
+function! s:DiffFoldLevel()
     let l:line=getline(v:lnum)
 
     if l:line =~# '^> \(diff\|Index\)' " file
