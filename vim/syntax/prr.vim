@@ -10,26 +10,24 @@ if exists("b:current_syntax")
   finish
 endif
 
-syn region prrFile start=/^> diff/ end=/^> diff/ms=s-1,me=s-1 transparent fold keepend contains=prrHeader,prrIndex,prrChunk
+" match + but not +++
+syn match prrAdded   "^> +\(++\)\@!.*"
+" match - but not ---
+syn match prrRemoved "^> -\(--\)\@!.*"
 
-syn region prrChunk start=/^> @@/ start=/^\n> /rs=e-2 end=/^> @@/ms=s-1,me=s-1 end=/^> diff/ms=s-1,me=s-1 end=/^$/ transparent fold keepend contains=CONTAINED,prrTag
-
-syn match prrAdded   contained "^> +.*"
-syn match prrRemoved contained "^> -.*"
-
-syn match prrHeader contained "^> diff.*"
-syn match prrIndex contained "^> index.*"
-syn match prrChunkH contained "^> @@.*"
+syn match prrHeader "^> diff --git .*"
+syn match prrIndex "^> index \w*\.\.\w*\( \w*\)\?"
+syn match prrChunkH "^> @@ .* @@"
 
 syn match prrTag "^@.*" contains=prrTagName,prrResult transparent
 
-syn match prrTagName contained "@prr" nextgroup=prrResult
-syn keyword prrResult contained approve reject comment
+syn match prrTagName "@prr" nextgroup=prrResult
+syn keyword prrResult approve reject comment
 
 " Define the default highlighting.
 " Only used when an item doesn't have highlighting yet
-hi def link prrAdded           Identifier
-hi def link prrRemoved         Special
+hi def link prrAdded           Added
+hi def link prrRemoved         Removed
 
 hi def link prrTagName Keyword
 hi def link prrResult String
