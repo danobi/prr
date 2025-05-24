@@ -19,7 +19,7 @@ syn match prrHeader "^> diff --git .*"
 syn match prrIndex "^> index \w*\.\.\w*\( \w*\)\?"
 syn match prrChunkH "^> @@ .* @@"
 
-syn match prrTag "^@.*" contains=prrTagName,prrResult transparent
+syn match prrTag "^@prr .*" contains=prrTagName,prrResult transparent
 
 syn match prrTagName contained "@prr" nextgroup=prrResult
 syn keyword prrResult contained approve reject comment
