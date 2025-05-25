@@ -19,10 +19,10 @@ syn match prrHeader "^> diff --git .*"
 syn match prrIndex "^> index \w*\.\.\w*\( \w*\)\?"
 syn match prrChunkH "^> @@ .* @@"
 
-syn match prrTag "^@.*" contains=prrTagName,prrResult transparent
+syn match prrTag "^@prr .*" contains=prrTagName,prrResult transparent
 
-syn match prrTagName "@prr" nextgroup=prrResult
-syn keyword prrResult approve reject comment
+syn match prrTagName contained "@prr" nextgroup=prrResult
+syn keyword prrResult contained approve reject comment
 
 " Define the default highlighting.
 " Only used when an item doesn't have highlighting yet
