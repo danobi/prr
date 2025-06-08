@@ -26,12 +26,25 @@ The following global configuration options are supported:
 The required `token` field is your Github Personal Authentical Token as a
 string.
 
-Example:
+Examples:
+
+```toml
+[prr]
+token = "$PRR_TOKEN"
+```
 
 ```toml
 [prr]
 token = "ghp_Kuzzzzzzzzzzzzdonteventryzzzzzzzzzzz"
 ```
+
+If `token` is absent, then the following environment variables will be checked in order and 
+the first token found will be used:
+
+- `GH_TOKEN`
+- `GITHUB_TOKEN`
+- `GH_ENTERPRISE_TOKEN`
+- `GITHUB_ENTERPRISE_TOKEN`
 
 ### The `workdir` field
 

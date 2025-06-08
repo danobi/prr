@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -9,6 +10,9 @@ use octocrab::Octocrab;
 use prettytable::{format, row, Table};
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
+
+#[cfg(test)]
+use serial_test::serial;
 
 use crate::parser::{FileComment, LineLocation, ReviewAction};
 use crate::review::{get_all_existing, Review, ReviewStatus};
@@ -31,10 +35,47 @@ lazy_static! {
 
 const GITHUB_BASE_URL: &str = "https://api.github.com";
 
+/// Resolves a GitHub token from either environment variables or config value.
+///
+/// If the config token starts with '$', we can assume it's an envvar reference.
+/// If no config token is provided, we check standard GitHub environment variables
+/// in order of precedence as per https://cli.github.com/manual/gh_help_environment:
+/// GH_TOKEN, GITHUB_TOKEN, GH_ENTERPRISE_TOKEN, GITHUB_ENTERPRISE_TOKEN.
+/// If none are found and no config token was provided, returns an error.
+/// If none are found but a config token was provided, returns the config token as-is.
+fn resolve_github_token(config_token: Option<&str>) -> Result<String> {
+    if let Some(token) = config_token {
+        if let Some(env_var_name) = token.strip_prefix('$') {
+            return env::var(env_var_name)
+                .with_context(|| format!("Environment variable '{}' not found", env_var_name));
+        }
+    }
+
+    let known_env_vars = [
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_ENTERPRISE_TOKEN",
+        "GITHUB_ENTERPRISE_TOKEN",
+    ];
+
+    for env_var in &known_env_vars {
+        if let Ok(token) = env::var(env_var) {
+            if !token.is_empty() {
+                return Ok(token);
+            }
+        }
+    }
+
+    match config_token {
+        Some(token) => Ok(token.to_string()),
+        None => bail!("No GitHub token found in config or environment variables"),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct PrrConfig {
     /// GH personal token
-    token: String,
+    token: Option<String>,
     /// Directory to place review files
     workdir: Option<String>,
     /// Github URL
@@ -123,8 +164,11 @@ impl Prr {
             }
         };
 
+        let token = resolve_github_token(config.prr.token.as_deref())
+            .context("Failed to resolve GitHub token")?;
+
         let octocrab = Octocrab::builder()
-            .personal_token(config.prr.token.clone())
+            .personal_token(token)
             .base_uri(config.url())
             .context("Failed to parse github base URL")?
             .build()
@@ -700,6 +744,171 @@ mod tests {
                     .expect("copy in copy_dir_all failed");
             }
         }
+    }
+
+    #[test]
+    fn test_resolve_github_token_from_custom_env_var_reference() {
+        env::set_var("PRR_TEST_TOKEN_12345", "env_token_value");
+        let result = resolve_github_token(Some("$PRR_TEST_TOKEN_12345")).unwrap();
+        assert_eq!(result, "env_token_value");
+        env::remove_var("PRR_TEST_TOKEN_12345");
+    }
+
+    #[test]
+    #[serial]
+    fn test_resolve_github_token_from_known_env_var_reference() {
+        env::set_var("GITHUB_TOKEN", "env_token_value");
+        let result = resolve_github_token(Some("$GITHUB_TOKEN")).unwrap();
+        assert_eq!(result, "env_token_value");
+        env::remove_var("GITHUB_TOKEN");
+    }
+
+    #[test]
+    fn test_resolve_github_token_from_missing_env_var_reference() {
+        env::remove_var("PRR_MISSING_TOKEN_98765");
+        let result = resolve_github_token(Some("$PRR_MISSING_TOKEN_98765"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_resolve_github_token_with_no_config_token_fallback_to_env() {
+        let env_vars = [
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_ENTERPRISE_TOKEN",
+            "GITHUB_ENTERPRISE_TOKEN",
+        ];
+        for var in &env_vars {
+            env::remove_var(var);
+        }
+
+        env::set_var("GITHUB_TOKEN", "fallback_env_token");
+
+        let result = resolve_github_token(None).unwrap();
+        assert_eq!(result, "fallback_env_token");
+
+        env::remove_var("GITHUB_TOKEN");
+    }
+
+    #[test]
+    #[serial]
+    fn test_resolve_github_token_with_no_config_token_no_env_error() {
+        let env_vars = [
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_ENTERPRISE_TOKEN",
+            "GITHUB_ENTERPRISE_TOKEN",
+        ];
+        for var in &env_vars {
+            env::remove_var(var);
+        }
+
+        let result = resolve_github_token(None);
+        assert!(result.is_err());
+        let error_msg = result.err().unwrap().to_string();
+        assert!(error_msg.contains("No GitHub token found in config or environment variables"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_prr_with_missing_token_field_should_use_env_var() {
+        env::set_var("GITHUB_TOKEN", "env_var_token_value");
+
+        let gconfig = r#"
+            [prr]
+            workdir = "/tmp"
+        "#;
+
+        let (_prr, _dir) = config(gconfig, None);
+
+        env::remove_var("GITHUB_TOKEN");
+    }
+
+    #[tokio::test]
+    async fn test_env_var_resolution_in_global_config() {
+        env::set_var("PRR_TEST_TOKEN_CONFIG", "config_env_token_value");
+
+        let gconfig = r#"
+            [prr]
+            token = "$PRR_TEST_TOKEN_CONFIG"
+            workdir = "/tmp"
+        "#;
+
+        let result = config(gconfig, None);
+        assert!(result.0.config.prr.token == Some("$PRR_TEST_TOKEN_CONFIG".to_string()));
+
+        env::remove_var("PRR_TEST_TOKEN_CONFIG");
+    }
+
+    #[tokio::test]
+    async fn test_env_var_resolution_in_local_config() {
+        env::set_var("PRR_LOCAL_TEST_TOKEN", "local_config_env_token");
+
+        let gconfig = r#"
+            [prr]
+            token = "fallback_token"
+            workdir = "/tmp"
+        "#;
+
+        let lconfig = r#"
+            [prr]
+            token = "$PRR_LOCAL_TEST_TOKEN"
+            workdir = "/tmp"
+        "#;
+
+        let result = config(gconfig, Some(lconfig));
+        assert!(result.0.config.prr.token == Some("$PRR_LOCAL_TEST_TOKEN".to_string()));
+
+        env::remove_var("PRR_LOCAL_TEST_TOKEN");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_env_var_fallback_to_token() {
+        let env_vars = [
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_ENTERPRISE_TOKEN",
+            "GITHUB_ENTERPRISE_TOKEN",
+        ];
+        for var in &env_vars {
+            env::remove_var(var);
+        }
+
+        env::set_var("GITHUB_TOKEN", "github_token_fallback");
+
+        let gconfig = r#"
+            [prr]
+            token = "non_env_token"
+            workdir = "/tmp"
+        "#;
+
+        let result = config(gconfig, None);
+        assert!(result.0.config.prr.token == Some("non_env_token".to_string()));
+
+        env::remove_var("GITHUB_TOKEN");
+    }
+
+    #[test]
+    fn test_env_var_resolution_missing_var_in_config() {
+        env::remove_var("PRR_MISSING_CONFIG_TOKEN");
+
+        let gconfig = r#"
+            [prr]
+            token = "$PRR_MISSING_CONFIG_TOKEN"
+            workdir = "/tmp"
+        "#;
+
+        let dir = TempDir::new().unwrap();
+        let gpath = dir.path().join("config.toml");
+        let mut gfile = File::create(&gpath).unwrap();
+        write!(&mut gfile, "{}", gconfig).unwrap();
+
+        let result = Prr::new(&gpath, None);
+        assert!(result.is_err());
+        let error_msg = result.err().unwrap().to_string();
+        assert!(error_msg.contains("Failed to resolve GitHub token"));
     }
 
     #[tokio::test]
