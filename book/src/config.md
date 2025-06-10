@@ -23,23 +23,17 @@ The following global configuration options are supported:
 
 ### The `token` field
 
-The required `token` field is your Github Personal Authentical Token as a
-string.
+The `token` field is your Github Personal Authentical Token as a string.
 
-Examples:
-
-```toml
-[prr]
-token = "$PRR_TOKEN"
-```
+Example:
 
 ```toml
 [prr]
 token = "ghp_Kuzzzzzzzzzzzzdonteventryzzzzzzzzzzz"
 ```
 
-If `token` is absent, then the following environment variables will be checked in order and 
-the first token found will be used:
+If the `token` field is absent - or set to an empty string - then the following environment
+variables will be checked in order and the first token found will be used:
 
 - `GH_TOKEN`
 - `GITHUB_TOKEN`

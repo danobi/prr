@@ -16,12 +16,6 @@ workdir = "/home/dxu/dev/review"
 EOF
 ```
 
-`token` can be provided in one of a few ways. In order of precedence:
-- Referencing an environment variable containing the token e.g. `$PRR_TOKEN`
-- Having `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN` already defined in your environment
-- Passing the token value as-is
-
-If `token` is absent from the config, then the above environment variables will be checked in order and 
-the first token found will be used.
+See [`token`](./config.md#the-token-field) for further details on how to provide a GitHub token.
 
 Note `workdir` can be any directory. (You don't have to use my unix name)
