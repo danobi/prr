@@ -27,7 +27,6 @@ xdg = "2.4"
 [dev-dependencies]
 pretty_assertions = "1.4.0"
 tempfile = "3.8.1"
-serial_test = "3.2.0"
 
 [build-dependencies]
 anyhow = "1.0"
