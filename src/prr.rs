@@ -804,14 +804,16 @@ mod tests {
         };
 
         let result = resolve_github_token(None, env_lookup).unwrap();
-        assert_eq!(result, "gh_token"); // GH_TOKEN should have higher precedence
+        // GH_TOKEN should have higher precedence
+        assert_eq!(result, "gh_token");
     }
 
     #[test]
     fn test_resolve_github_token_empty_env_var_error() {
         let env_lookup = |var: &str| -> Result<String, std::env::VarError> {
             match var {
-                "GITHUB_TOKEN" => Ok("".to_string()), // Empty token
+                // Empty token
+                "GITHUB_TOKEN" => Ok("".to_string()),
                 _ => Err(std::env::VarError::NotPresent),
             }
         };
