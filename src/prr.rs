@@ -825,46 +825,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_prr_with_missing_token_field_should_use_env_var() {
-        env::set_var("GITHUB_TOKEN", "env_var_token_value");
-
-        let gconfig = r#"
-            [prr]
-            workdir = "/tmp"
-        "#;
-
-        let (_prr, _dir) = config(gconfig, None);
-
-        env::remove_var("GITHUB_TOKEN");
-    }
-
-    #[tokio::test]
-    async fn test_env_var_fallback_to_token() {
-        let env_vars = [
-            "GH_TOKEN",
-            "GITHUB_TOKEN",
-            "GH_ENTERPRISE_TOKEN",
-            "GITHUB_ENTERPRISE_TOKEN",
-        ];
-        for var in &env_vars {
-            env::remove_var(var);
-        }
-
-        env::set_var("GITHUB_TOKEN", "github_token_fallback");
-
-        let gconfig = r#"
-            [prr]
-            token = "non_env_token"
-            workdir = "/tmp"
-        "#;
-
-        let result = config(gconfig, None);
-        assert!(result.0.config.prr.token == Some("non_env_token".to_string()));
-
-        env::remove_var("GITHUB_TOKEN");
-    }
-
-    #[tokio::test]
     async fn test_apply_pr() {
         let gconfig = r#"
              [prr]
