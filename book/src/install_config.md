@@ -16,4 +16,6 @@ workdir = "/home/dxu/dev/review"
 EOF
 ```
 
+See [`token`](./config.md#the-token-field) for further details on how to provide a GitHub token.
+
 Note `workdir` can be any directory. (You don't have to use my unix name)

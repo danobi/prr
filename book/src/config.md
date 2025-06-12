@@ -23,8 +23,7 @@ The following global configuration options are supported:
 
 ### The `token` field
 
-The required `token` field is your Github Personal Authentical Token as a
-string.
+The `token` field is your Github Personal Authentical Token as a string.
 
 Example:
 
@@ -32,6 +31,14 @@ Example:
 [prr]
 token = "ghp_Kuzzzzzzzzzzzzdonteventryzzzzzzzzzzz"
 ```
+
+If the `token` field is absent - or set to an empty string - then the following environment
+variables will be checked in order and the first token found will be used:
+
+- `GH_TOKEN`
+- `GITHUB_TOKEN`
+- `GH_ENTERPRISE_TOKEN`
+- `GITHUB_ENTERPRISE_TOKEN`
 
 ### The `workdir` field
 
