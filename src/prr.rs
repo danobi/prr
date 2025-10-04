@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use crate::parser::{FileComment, LineLocation, ReviewAction};
 use crate::review::{get_all_existing, Review, ReviewStatus};
-use regex::{Captures, Regex};
+use regex::Regex;
 
 // Use lazy static to ensure regex is only compiled once
 lazy_static! {
@@ -22,12 +22,6 @@ lazy_static! {
     //      danobi/prr-test-repo/6
     //
     static ref SHORT: Regex = Regex::new(r"^(?P<org>[\w\-_\.]+)/(?P<repo>[\w\-_\.]+)/(?P<pr_num>\d+)").unwrap();
-
-    // Regex for url input. Url looks something like:
-    //
-    //      https://github.com/danobi/prr-test-repo/pull/6
-    //
-    static ref URL: Regex = Regex::new(r".*github\.com/(?P<org>.+)/(?P<repo>.+)/pull/(?P<pr_num>\d+)").unwrap();
 }
 
 const GITHUB_BASE_URL: &str = "https://api.github.com";
@@ -227,21 +221,7 @@ impl Prr {
 
     /// Parses a PR string in the form of `danobi/prr/24` and returns
     /// a tuple ("danobi", "prr", 24) or an error if string is malformed.
-    /// If the local repository config is defined, it just needs the PR number.
     pub fn parse_pr_str(&self, s: &str) -> Result<(String, String, u64)> {
-        let f = |captures: Captures| -> Result<(String, String, u64)> {
-            let owner = captures.name("org").unwrap().as_str().to_owned();
-            let repo = captures.name("repo").unwrap().as_str().to_owned();
-            let pr_nr: u64 = captures
-                .name("pr_num")
-                .unwrap()
-                .as_str()
-                .parse()
-                .context("Failed to parse pr number")?;
-
-            Ok((owner, repo, pr_nr))
-        };
-
         let repo = if let Some(local_config) = &self.config.local {
             if let Some(url) = &local_config.repository {
                 if url.ends_with('/') {
@@ -257,12 +237,34 @@ impl Prr {
         };
 
         if let Some(captures) = SHORT.captures(&repo) {
-            f(captures)
-        } else if let Some(captures) = URL.captures(&repo) {
-            f(captures)
-        } else {
-            bail!("Invalid PR ref format")
+            let owner = captures.name("org").unwrap().as_str().to_owned();
+            let repo = captures.name("repo").unwrap().as_str().to_owned();
+            let pr_nr: u64 = captures
+                .name("pr_num")
+                .unwrap()
+                .as_str()
+                .parse()
+                .context("Failed to parse pr number")?;
+
+            return Ok((owner, repo, pr_nr));
         }
+
+        if repo.starts_with("http") || repo.contains("://") {
+            let uri: Uri = repo.parse().context("Failed to parse URL")?;
+
+            let path = uri.path().trim_start_matches('/');
+            let segments: Vec<_> = path.split('/').collect();
+
+            if segments.len() >= 4 && segments[2] == "pull" {
+                let pr_num = segments[3]
+                    .parse::<u64>()
+                    .context("Failed to parse PR number")?;
+
+                return Ok((segments[0].to_string(), segments[1].to_string(), pr_num));
+            }
+        }
+
+        bail!("Invalid PR ref format")
     }
 
     /// Gets a new review from the internet and writes it to the filesystem
@@ -634,6 +636,42 @@ mod tests {
         assert_eq!(
             PRR.0.parse_pr_str(pr_ref).unwrap(),
             ("example".to_string(), "prr1.test_test-".to_string(), 42)
+        )
+    }
+
+    #[tokio::test]
+    async fn test_parse_github_url() {
+        let pr_ref = "https://github.com/example/repo/pull/42";
+        assert_eq!(
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
+            ("example".to_string(), "repo".to_string(), 42)
+        )
+    }
+
+    #[tokio::test]
+    async fn test_parse_github_url_with_extra_path() {
+        let pr_ref = "https://github.com/example/repo/pull/42/files";
+        assert_eq!(
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
+            ("example".to_string(), "repo".to_string(), 42)
+        )
+    }
+
+    #[tokio::test]
+    async fn test_parse_github_url_with_complex_path() {
+        let pr_ref = "https://github.com/example/repo/pull/42/files/abc123..def456";
+        assert_eq!(
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
+            ("example".to_string(), "repo".to_string(), 42)
+        )
+    }
+
+    #[tokio::test]
+    async fn test_parse_custom_github_host() {
+        let pr_ref = "https://github.acme.com/example/repo/pull/42";
+        assert_eq!(
+            PRR.0.parse_pr_str(pr_ref).unwrap(),
+            ("example".to_string(), "repo".to_string(), 42)
         )
     }
 
