@@ -541,6 +541,142 @@ impl Prr {
 
         Ok(())
     }
+
+    /// Parses a GitHub remote URL and extracts owner/repo.
+    /// Supports both SSH (git@github.com:owner/repo.git) and
+    /// HTTPS (https://github.com/owner/repo.git) formats.
+    fn parse_github_remote_url(url: &str) -> Result<(String, String)> {
+        // Try SSH format: git@github.com:owner/repo.git
+        if let Some(rest) = url.strip_prefix("git@") {
+            if let Some(colon_pos) = rest.find(':') {
+                let path = &rest[colon_pos + 1..];
+                let path = path.strip_suffix(".git").unwrap_or(path);
+                let parts: Vec<&str> = path.split('/').collect();
+                if parts.len() >= 2 {
+                    return Ok((parts[0].to_string(), parts[1].to_string()));
+                }
+            }
+        }
+
+        // Try HTTPS format: https://github.com/owner/repo.git
+        if url.starts_with("http://") || url.starts_with("https://") {
+            let uri: Uri = url.parse().context("Failed to parse remote URL")?;
+            let path = uri.path().trim_start_matches('/');
+            let path = path.strip_suffix(".git").unwrap_or(path);
+            let parts: Vec<&str> = path.split('/').collect();
+            if parts.len() >= 2 {
+                return Ok((parts[0].to_string(), parts[1].to_string()));
+            }
+        }
+
+        bail!("Could not parse GitHub URL from remote: {}", url)
+    }
+
+    /// Detects owner/repo and head_owner from a git repository's remotes.
+    /// Returns (repo_owner, repo_name, head_owner) where:
+    /// - repo_owner/repo_name: the repo to query PRs from (upstream if exists, else origin)
+    /// - head_owner: the owner for the PR head branch (origin owner for forks, else repo_owner)
+    fn detect_repo_from_repository(repo: &Repository) -> Result<(String, String, String)> {
+        // Try to get upstream (the repo to query PRs from)
+        let upstream_info = repo.find_remote("upstream").ok().and_then(|r| {
+            r.url()
+                .and_then(|url| Self::parse_github_remote_url(url).ok())
+        });
+
+        // Try to get origin (where the user's branches are)
+        let origin_info = repo.find_remote("origin").ok().and_then(|r| {
+            r.url()
+                .and_then(|url| Self::parse_github_remote_url(url).ok())
+        });
+
+        match (upstream_info, origin_info) {
+            // Fork workflow: query upstream, but head is from origin owner
+            (Some((repo_owner, repo_name)), Some((head_owner, _))) => {
+                Ok((repo_owner, repo_name, head_owner))
+            }
+            // No upstream, use origin for everything
+            (None, Some((owner, repo_name))) => Ok((owner.clone(), repo_name, owner)),
+            // Only upstream (unusual), use it for everything
+            (Some((owner, repo_name)), None) => Ok((owner.clone(), repo_name, owner)),
+            // No remotes found
+            (None, None) => bail!("No 'upstream' or 'origin' remote found"),
+        }
+    }
+
+    /// Detects owner/repo and head_owner from git remotes in the current directory.
+    fn detect_repo_from_remote() -> Result<(String, String, String)> {
+        let repo = Repository::discover(".").context("Not in a git repository")?;
+        Self::detect_repo_from_repository(&repo)
+    }
+
+    /// Gets the branch name from a git repository's HEAD.
+    fn detect_branch_from_repository(repo: &Repository) -> Result<String> {
+        let head = repo.head().context("Failed to get HEAD reference")?;
+
+        if !head.is_branch() {
+            bail!("HEAD is not a branch (detached HEAD state)");
+        }
+
+        let branch_name = head
+            .shorthand()
+            .ok_or_else(|| anyhow!("Failed to get branch name"))?;
+
+        Ok(branch_name.to_string())
+    }
+
+    /// Gets the current git branch name from the current directory.
+    fn detect_current_branch() -> Result<String> {
+        let repo = Repository::discover(".").context("Not in a git repository")?;
+        Self::detect_branch_from_repository(&repo)
+    }
+
+    /// Finds the PR number for a given branch in a repo.
+    /// Queries GitHub API: GET /repos/{owner}/{repo}/pulls?head={head_owner}:{branch}
+    ///
+    /// - `owner`/`repo`: the repository to query PRs from
+    /// - `head_owner`: the owner of the head branch (may differ from `owner` for forks)
+    /// - `branch`: the branch name
+    pub async fn detect_pr_for_branch(
+        &self,
+        owner: &str,
+        repo: &str,
+        head_owner: &str,
+        branch: &str,
+    ) -> Result<u64> {
+        let prs = self
+            .crab
+            .pulls(owner, repo)
+            .list()
+            .head(format!("{}:{}", head_owner, branch))
+            .send()
+            .await
+            .context("Failed to query GitHub for PRs")?;
+
+        let items: Vec<_> = prs.items.into_iter().collect();
+
+        if items.is_empty() {
+            bail!(
+                "No open PR found for branch '{}' in {}/{}",
+                branch,
+                owner,
+                repo
+            );
+        }
+
+        // Return the first PR if multiple exist
+        Ok(items[0].number)
+    }
+
+    /// Auto-detects owner, repo, and PR number from current git state.
+    pub async fn detect_pr(&self) -> Result<(String, String, u64)> {
+        let (owner, repo, head_owner) = Self::detect_repo_from_remote()?;
+        let branch = Self::detect_current_branch()?;
+        let pr_num = self
+            .detect_pr_for_branch(&owner, &repo, &head_owner, &branch)
+            .await?;
+
+        Ok((owner, repo, pr_num))
+    }
 }
 
 #[cfg(test)]
@@ -927,5 +1063,183 @@ mod tests {
         let want_after_apply = fs::read("testdata/testgitrepo/README-applied.md")
             .expect("failed to read README-applied.md");
         assert_eq!(got_after_apply, want_after_apply);
+    }
+
+    #[test]
+    fn test_parse_github_remote_url_ssh() {
+        let result = Prr::parse_github_remote_url("git@github.com:danobi/prr.git").unwrap();
+        assert_eq!(result, ("danobi".to_string(), "prr".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_remote_url_ssh_no_git_suffix() {
+        let result = Prr::parse_github_remote_url("git@github.com:danobi/prr").unwrap();
+        assert_eq!(result, ("danobi".to_string(), "prr".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_remote_url_https() {
+        let result = Prr::parse_github_remote_url("https://github.com/danobi/prr.git").unwrap();
+        assert_eq!(result, ("danobi".to_string(), "prr".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_remote_url_https_no_git_suffix() {
+        let result = Prr::parse_github_remote_url("https://github.com/danobi/prr").unwrap();
+        assert_eq!(result, ("danobi".to_string(), "prr".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_remote_url_enterprise_ssh() {
+        let result = Prr::parse_github_remote_url("git@github.acme.com:org/repo.git").unwrap();
+        assert_eq!(result, ("org".to_string(), "repo".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_remote_url_enterprise_https() {
+        let result = Prr::parse_github_remote_url("https://github.acme.com/org/repo.git").unwrap();
+        assert_eq!(result, ("org".to_string(), "repo".to_string()));
+    }
+
+    #[test]
+    fn test_parse_github_remote_url_invalid() {
+        let result = Prr::parse_github_remote_url("not-a-valid-url");
+        assert!(result.is_err());
+    }
+
+    /// Helper to create a temp git repo with an initial commit
+    fn create_temp_git_repo() -> (git2::Repository, TempDir) {
+        let dir = TempDir::new().unwrap();
+        let repo = git2::Repository::init(dir.path()).unwrap();
+
+        // Create an initial commit so HEAD exists
+        {
+            let sig = git2::Signature::now("test", "test@test.com").unwrap();
+            let tree_id = repo.index().unwrap().write_tree().unwrap();
+            let tree = repo.find_tree(tree_id).unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
+                .unwrap();
+        }
+
+        (repo, dir)
+    }
+
+    #[test]
+    fn test_detect_repo_from_repository_ssh() {
+        let (repo, _dir) = create_temp_git_repo();
+        repo.remote("origin", "git@github.com:testowner/testrepo.git")
+            .unwrap();
+
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        assert_eq!(owner, "testowner");
+        assert_eq!(repo_name, "testrepo");
+        assert_eq!(head_owner, "testowner"); // Same as owner when no upstream
+    }
+
+    #[test]
+    fn test_detect_repo_from_repository_https() {
+        let (repo, _dir) = create_temp_git_repo();
+        repo.remote("origin", "https://github.com/testowner/testrepo.git")
+            .unwrap();
+
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        assert_eq!(owner, "testowner");
+        assert_eq!(repo_name, "testrepo");
+        assert_eq!(head_owner, "testowner"); // Same as owner when no upstream
+    }
+
+    #[test]
+    fn test_detect_repo_from_repository_no_remote() {
+        let (repo, _dir) = create_temp_git_repo();
+        // Don't add any remote
+
+        let result = Prr::detect_repo_from_repository(&repo);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("upstream") || err_msg.contains("origin"));
+    }
+
+    #[test]
+    fn test_detect_repo_from_repository_fork_workflow() {
+        let (repo, _dir) = create_temp_git_repo();
+        repo.remote("origin", "git@github.com:myuser/fork.git")
+            .unwrap();
+        repo.remote(
+            "upstream",
+            "git@github.com:upstream-owner/upstream-repo.git",
+        )
+        .unwrap();
+
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        assert_eq!(owner, "upstream-owner"); // Repo to query PRs from
+        assert_eq!(repo_name, "upstream-repo");
+        assert_eq!(head_owner, "myuser"); // Head owner is from origin (the fork)
+    }
+
+    #[test]
+    fn test_detect_repo_from_repository_falls_back_to_origin() {
+        let (repo, _dir) = create_temp_git_repo();
+        repo.remote("origin", "git@github.com:myuser/myrepo.git")
+            .unwrap();
+        // No upstream remote
+
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        assert_eq!(owner, "myuser");
+        assert_eq!(repo_name, "myrepo");
+        assert_eq!(head_owner, "myuser"); // Same as owner when no upstream
+    }
+
+    #[test]
+    fn test_detect_repo_from_repository_only_upstream() {
+        let (repo, _dir) = create_temp_git_repo();
+        repo.remote(
+            "upstream",
+            "git@github.com:upstream-owner/upstream-repo.git",
+        )
+        .unwrap();
+        // No origin remote (unusual but possible)
+
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        assert_eq!(owner, "upstream-owner");
+        assert_eq!(repo_name, "upstream-repo");
+        assert_eq!(head_owner, "upstream-owner"); // Same as owner when no origin
+    }
+
+    #[test]
+    fn test_detect_branch_from_repository_master() {
+        let (repo, _dir) = create_temp_git_repo();
+        // Default branch after init with a commit is master (or main depending on git config)
+
+        let result = Prr::detect_branch_from_repository(&repo).unwrap();
+        // Could be "master" or "main" depending on git version/config
+        assert!(result == "master" || result == "main");
+    }
+
+    #[test]
+    fn test_detect_branch_from_repository_feature_branch() {
+        let (repo, _dir) = create_temp_git_repo();
+
+        // Create and checkout a new branch
+        let head = repo.head().unwrap();
+        let commit = head.peel_to_commit().unwrap();
+        repo.branch("feature-branch", &commit, false).unwrap();
+        repo.set_head("refs/heads/feature-branch").unwrap();
+
+        let result = Prr::detect_branch_from_repository(&repo).unwrap();
+        assert_eq!(result, "feature-branch");
+    }
+
+    #[test]
+    fn test_detect_branch_from_repository_detached_head() {
+        let (repo, _dir) = create_temp_git_repo();
+
+        // Detach HEAD by checking out a commit directly
+        let head = repo.head().unwrap();
+        let commit = head.peel_to_commit().unwrap();
+        repo.set_head_detached(commit.id()).unwrap();
+
+        let result = Prr::detect_branch_from_repository(&repo);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("detached HEAD"));
     }
 }

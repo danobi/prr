@@ -110,6 +110,14 @@ The optional `repository` field takes a string in format of
 If specified, you may omit the `${ORG}/${REPO}` from PR string arguments.
 For example, you may run `prr get 6` instead of `prr get danobi/prr/6`.
 
+> [!TIP]
+> As an alternative to configuring this field, you can omit the PR
+> argument entirely when running from a git repository. If you're on a branch
+> that has an associated PR, `prr` will auto-detect the owner, repo, and PR
+> number from the git remote and current branch name. This works with fork
+> workflows too — `prr` uses `upstream` (if present) to identify the repository,
+> and `origin` to identify your fork.
+
 
 Example:
 

@@ -68,7 +68,10 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Get { pr, force, open } => {
-            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
+            let (owner, repo, pr_num) = match pr {
+                Some(pr_str) => prr.parse_pr_str(&pr_str)?,
+                None => prr.detect_pr().await?,
+            };
             let review = prr.get_pr(&owner, &repo, pr_num, force).await?;
             let path = review.path();
             println!("{}", path.display());
@@ -77,12 +80,18 @@ async fn main() -> Result<()> {
             }
         }
         Command::Edit { pr } => {
-            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
+            let (owner, repo, pr_num) = match pr {
+                Some(pr_str) => prr.parse_pr_str(&pr_str)?,
+                None => prr.detect_pr().await?,
+            };
             let review = prr.get_review(&owner, &repo, pr_num)?;
             open_review(&review.path()).context("Failed to open review file")?;
         }
         Command::Submit { pr, debug } => {
-            let (owner, repo, pr_num) = prr.parse_pr_str(&pr)?;
+            let (owner, repo, pr_num) = match pr {
+                Some(pr_str) => prr.parse_pr_str(&pr_str)?,
+                None => prr.detect_pr().await?,
+            };
             prr.submit_pr(&owner, &repo, pr_num, debug).await?;
         }
         Command::Apply { pr } => {
