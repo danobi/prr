@@ -130,7 +130,7 @@ Example:
 
 ```toml
 [local]
-repository = ".prr"
+workdir = ".prr"
 ```
 
 [0]: https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
