@@ -6,5 +6,4 @@ title = "prr"
 
 [output.html]
 git-repository-url = "https://github.com/danobi/prr"
-git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/danobi/prr/edit/master/book/{path}"
