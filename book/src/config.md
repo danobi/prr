@@ -101,6 +101,8 @@ The following local configuration options are supported:
 * `[local]`
     * [`repository`](#the-repository-field)
     * [`workdir`](#the-local-workdir-field)
+    * [`upstream_remote`](#the-upstream_remote-field)
+    * [`origin_remote`](#the-origin_remote-field)
 
 ### The `repository` field
 
@@ -124,6 +126,31 @@ Example:
 ```toml
 [local]
 repository = "danobi/prr"
+```
+
+### The `upstream_remote` field
+
+The optional `upstream_remote` field overrides the git remote name that `prr`
+treats as the upstream repository when auto-detecting PRs. Defaults to
+`"upstream"`.
+
+Example:
+
+```toml
+[local]
+upstream_remote = "main-repo"
+```
+
+### The `origin_remote` field
+
+The optional `origin_remote` field overrides the git remote name that `prr`
+treats as your fork when auto-detecting PRs. Defaults to `"origin"`.
+
+Example:
+
+```toml
+[local]
+origin_remote = "my-fork"
 ```
 
 ### The local `workdir` field

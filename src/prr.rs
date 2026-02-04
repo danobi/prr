@@ -86,6 +86,10 @@ struct PrrLocalConfig {
     repository: Option<String>,
     /// Local workdir override
     workdir: Option<String>,
+    /// Override the git remote name used as the upstream repo (default: "upstream")
+    upstream_remote: Option<String>,
+    /// Override the git remote name used as the origin/fork repo (default: "origin")
+    origin_remote: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -576,15 +580,19 @@ impl Prr {
     /// Returns (repo_owner, repo_name, head_owner) where:
     /// - repo_owner/repo_name: the repo to query PRs from (upstream if exists, else origin)
     /// - head_owner: the owner for the PR head branch (origin owner for forks, else repo_owner)
-    fn detect_repo_from_repository(repo: &Repository) -> Result<(String, String, String)> {
+    fn detect_repo_from_repository(
+        repo: &Repository,
+        upstream_remote: &str,
+        origin_remote: &str,
+    ) -> Result<(String, String, String)> {
         // Try to get upstream (the repo to query PRs from)
-        let upstream_info = repo.find_remote("upstream").ok().and_then(|r| {
+        let upstream_info = repo.find_remote(upstream_remote).ok().and_then(|r| {
             r.url()
                 .and_then(|url| Self::parse_github_remote_url(url).ok())
         });
 
         // Try to get origin (where the user's branches are)
-        let origin_info = repo.find_remote("origin").ok().and_then(|r| {
+        let origin_info = repo.find_remote(origin_remote).ok().and_then(|r| {
             r.url()
                 .and_then(|url| Self::parse_github_remote_url(url).ok())
         });
@@ -599,14 +607,21 @@ impl Prr {
             // Only upstream (unusual), use it for everything
             (Some((owner, repo_name)), None) => Ok((owner.clone(), repo_name, owner)),
             // No remotes found
-            (None, None) => bail!("No 'upstream' or 'origin' remote found"),
+            (None, None) => bail!(
+                "No '{}' or '{}' remote found",
+                upstream_remote,
+                origin_remote
+            ),
         }
     }
 
     /// Detects owner/repo and head_owner from git remotes in the current directory.
-    fn detect_repo_from_remote() -> Result<(String, String, String)> {
+    fn detect_repo_from_remote(
+        upstream_remote: &str,
+        origin_remote: &str,
+    ) -> Result<(String, String, String)> {
         let repo = Repository::discover(".").context("Not in a git repository")?;
-        Self::detect_repo_from_repository(&repo)
+        Self::detect_repo_from_repository(&repo, upstream_remote, origin_remote)
     }
 
     /// Gets the branch name from a git repository's HEAD.
@@ -669,7 +684,15 @@ impl Prr {
 
     /// Auto-detects owner, repo, and PR number from current git state.
     pub async fn detect_pr(&self) -> Result<(String, String, u64)> {
-        let (owner, repo, head_owner) = Self::detect_repo_from_remote()?;
+        let local = self.config.local.as_ref();
+        let upstream_remote = local
+            .and_then(|l| l.upstream_remote.as_deref())
+            .unwrap_or("upstream");
+        let origin_remote = local
+            .and_then(|l| l.origin_remote.as_deref())
+            .unwrap_or("origin");
+        let (owner, repo, head_owner) =
+            Self::detect_repo_from_remote(upstream_remote, origin_remote)?;
         let branch = Self::detect_current_branch()?;
         let pr_num = self
             .detect_pr_for_branch(&owner, &repo, &head_owner, &branch)
@@ -1130,7 +1153,7 @@ mod tests {
         repo.remote("origin", "git@github.com:testowner/testrepo.git")
             .unwrap();
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "testowner");
         assert_eq!(repo_name, "testrepo");
         assert_eq!(head_owner, "testowner"); // Same as owner when no upstream
@@ -1142,7 +1165,7 @@ mod tests {
         repo.remote("origin", "https://github.com/testowner/testrepo.git")
             .unwrap();
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "testowner");
         assert_eq!(repo_name, "testrepo");
         assert_eq!(head_owner, "testowner"); // Same as owner when no upstream
@@ -1153,7 +1176,7 @@ mod tests {
         let (repo, _dir) = create_temp_git_repo();
         // Don't add any remote
 
-        let result = Prr::detect_repo_from_repository(&repo);
+        let result = Prr::detect_repo_from_repository(&repo, "upstream", "origin");
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("upstream") || err_msg.contains("origin"));
@@ -1170,7 +1193,7 @@ mod tests {
         )
         .unwrap();
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "upstream-owner"); // Repo to query PRs from
         assert_eq!(repo_name, "upstream-repo");
         assert_eq!(head_owner, "myuser"); // Head owner is from origin (the fork)
@@ -1183,7 +1206,7 @@ mod tests {
             .unwrap();
         // No upstream remote
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "myuser");
         assert_eq!(repo_name, "myrepo");
         assert_eq!(head_owner, "myuser"); // Same as owner when no upstream
@@ -1199,10 +1222,34 @@ mod tests {
         .unwrap();
         // No origin remote (unusual but possible)
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo).unwrap();
+        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "upstream-owner");
         assert_eq!(repo_name, "upstream-repo");
         assert_eq!(head_owner, "upstream-owner"); // Same as owner when no origin
+    }
+
+
+    #[test]
+    fn test_detect_repo_from_repository_custom_remote_names() {
+        let (repo, _dir) = create_temp_git_repo();
+        repo.remote("my-fork", "git@github.com:myuser/fork.git")
+            .unwrap();
+        repo.remote(
+            "main-repo",
+            "git@github.com:upstream-owner/upstream-repo.git",
+        )
+        .unwrap();
+
+        // Using default remote names should fail (no "upstream" or "origin")
+        let result = Prr::detect_repo_from_repository(&repo, "upstream", "origin");
+        assert!(result.is_err());
+
+        // Using custom remote names should work
+        let (owner, repo_name, head_owner) =
+            Prr::detect_repo_from_repository(&repo, "main-repo", "my-fork").unwrap();
+        assert_eq!(owner, "upstream-owner");
+        assert_eq!(repo_name, "upstream-repo");
+        assert_eq!(head_owner, "myuser");
     }
 
     #[test]
