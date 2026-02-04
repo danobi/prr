@@ -669,17 +669,22 @@ impl Prr {
 
         let items: Vec<_> = prs.items.into_iter().collect();
 
-        if items.is_empty() {
-            bail!(
-                "No open PR found for branch '{}' in {}/{}",
+        match items.len() {
+            0 => bail!(
+                "No open PR found for branch \'{}\' in {}/{}",
                 branch,
                 owner,
                 repo
-            );
+            ),
+            1 => Ok(items[0].number),
+            n => bail!(
+                "Found {} open PRs for branch \'{}\' in {}/{}; specify the PR explicitly",
+                n,
+                branch,
+                owner,
+                repo
+            ),
         }
-
-        // Return the first PR if multiple exist
-        Ok(items[0].number)
     }
 
     /// Auto-detects owner, repo, and PR number from current git state.
@@ -1153,7 +1158,8 @@ mod tests {
         repo.remote("origin", "git@github.com:testowner/testrepo.git")
             .unwrap();
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
+        let (owner, repo_name, head_owner) =
+            Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "testowner");
         assert_eq!(repo_name, "testrepo");
         assert_eq!(head_owner, "testowner"); // Same as owner when no upstream
@@ -1165,7 +1171,8 @@ mod tests {
         repo.remote("origin", "https://github.com/testowner/testrepo.git")
             .unwrap();
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
+        let (owner, repo_name, head_owner) =
+            Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "testowner");
         assert_eq!(repo_name, "testrepo");
         assert_eq!(head_owner, "testowner"); // Same as owner when no upstream
@@ -1193,7 +1200,8 @@ mod tests {
         )
         .unwrap();
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
+        let (owner, repo_name, head_owner) =
+            Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "upstream-owner"); // Repo to query PRs from
         assert_eq!(repo_name, "upstream-repo");
         assert_eq!(head_owner, "myuser"); // Head owner is from origin (the fork)
@@ -1206,7 +1214,8 @@ mod tests {
             .unwrap();
         // No upstream remote
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
+        let (owner, repo_name, head_owner) =
+            Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "myuser");
         assert_eq!(repo_name, "myrepo");
         assert_eq!(head_owner, "myuser"); // Same as owner when no upstream
@@ -1222,12 +1231,12 @@ mod tests {
         .unwrap();
         // No origin remote (unusual but possible)
 
-        let (owner, repo_name, head_owner) = Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
+        let (owner, repo_name, head_owner) =
+            Prr::detect_repo_from_repository(&repo, "upstream", "origin").unwrap();
         assert_eq!(owner, "upstream-owner");
         assert_eq!(repo_name, "upstream-repo");
         assert_eq!(head_owner, "upstream-owner"); // Same as owner when no origin
     }
-
 
     #[test]
     fn test_detect_repo_from_repository_custom_remote_names() {
