@@ -1,0 +1,84 @@
+#compdef prr
+
+_prr_reviews() {
+  local -a reviews
+  local handle r_status file
+
+  if (( ${_PRR_IN_COMPLETION:-0} )); then
+    return 1
+  fi
+  local _PRR_IN_COMPLETION=1
+
+  while IFS=' ' read -r handle r_status file _; do
+    [[ -z $handle ]] && continue
+    reviews+=("${handle}:${r_status}  ${file}")
+  done < <(prr status --no-titles 2>/dev/null)
+
+  (( ${#reviews[@]} )) || return 1
+
+  _describe 'review' reviews
+}
+
+_prr() {
+  local -a commands
+  commands=(
+    'get:Get a pull request and begin a review'
+    'edit:Open an existing review in $EDITOR'
+    'submit:Submit a review'
+    'apply:Apply a pull request to the working directory'
+    'status:Print a status summary of all known reviews'
+    'remove:Remove a review'
+  )
+
+  # Completing the first argument after `prr` -> list subcommands
+  if (( CURRENT == 2 )); then
+    if [[ ${words[CURRENT]} == -* ]]; then
+      _arguments \
+        '(-h --help)'{-h,--help}'[Print help information]' \
+        '(-V --version)'{-V,--version}'[Print version information]' \
+        '--config[Path to config file]:config file:_files'
+      return
+    fi
+
+    _describe -t commands 'prr command' commands
+    return
+  fi
+
+  local cmd=${words[2]}
+  case $cmd in
+    get)
+      _arguments \
+        '(-f --force)'{-f,--force}'[Ignore unsubmitted review checks]' \
+        '--open[Open review file in $EDITOR after download]' \
+        '1:pull request (eg. danobi/prr/24):'
+      ;;
+
+    edit)
+      _prr_reviews
+      ;;
+
+    submit)
+      _arguments \
+        '(-d --debug)'{-d,--debug}'[Print debug output while submitting]' \
+        '1:pull request (eg. danobi/prr/24):'
+      ;;
+
+    apply)
+      _arguments \
+        '1:pull request (eg. danobi/prr/24):'
+      ;;
+
+    status)
+      _arguments \
+        '(-n --no-titles)'{-n,--no-titles}'[Hide column titles from output]'
+      ;;
+
+    remove)
+      _arguments \
+        '(-f --force)'{-f,--force}'[Ignore unsubmitted review checks]' \
+        '(-s --submitted)'{-s,--submitted}'[Remove submitted reviews in addition to provided reviews]' \
+        '1:review to remove:_prr_reviews' \
+        '*:additional reviews:_prr_reviews'
+      ;;
+  esac
+}
