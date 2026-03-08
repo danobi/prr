@@ -7,6 +7,7 @@ _prr_reviews() {
   if (( ${_PRR_IN_COMPLETION:-0} )); then
     return 1
   fi
+
   local _PRR_IN_COMPLETION=1
 
   while IFS=' ' read -r handle r_status file _; do
@@ -16,11 +17,13 @@ _prr_reviews() {
 
   (( ${#reviews[@]} )) || return 1
 
-  _describe 'review' reviews
+  _describe -t reviews 'review' reviews
 }
 
 _prr() {
   local -a commands
+  local curcontext="$curcontext" state line
+
   commands=(
     'get:Get a pull request and begin a review'
     'edit:Open an existing review in $EDITOR'
@@ -30,55 +33,62 @@ _prr() {
     'remove:Remove a review'
   )
 
-  # Completing the first argument after `prr` -> list subcommands
-  if (( CURRENT == 2 )); then
-    if [[ ${words[CURRENT]} == -* ]]; then
-      _arguments \
-        '(-h --help)'{-h,--help}'[Print help information]' \
-        '(-V --version)'{-V,--version}'[Print version information]' \
-        '--config[Path to config file]:config file:_files'
-      return
-    fi
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[Print help information]' \
+    '(-V --version)'{-V,--version}'[Print version information]' \
+    '--config[Path to config file]:config file:_files' \
+    '1: :->cmd' \
+    '*:: :->args'
 
-    _describe -t commands 'prr command' commands
-    return
-  fi
-
-  local cmd=${words[2]}
-  case $cmd in
-    get)
-      _arguments \
-        '(-f --force)'{-f,--force}'[Ignore unsubmitted review checks]' \
-        '--open[Open review file in $EDITOR after download]' \
-        '1:pull request (eg. danobi/prr/24):'
+  case $state in
+    cmd)
+      _describe -t commands 'prr command' commands
       ;;
 
-    edit)
-      _prr_reviews
-      ;;
+    args)
+      case $line[1] in
+        get)
+          _arguments \
+            '(-h --help)'{-h,--help}'[Print help information]' \
+            '(-f --force)'{-f,--force}'[Ignore unsubmitted review checks]' \
+            '--open[Open review file in $EDITOR after download]' \
+            '1:pull request (eg. danobi/prr/24):'
+          ;;
 
-    submit)
-      _arguments \
-        '(-d --debug)'{-d,--debug}'[Print debug output while submitting]' \
-        '1:pull request (eg. danobi/prr/24):'
-      ;;
+        edit)
+          _arguments \
+            '(-h --help)'{-h,--help}'[Print help information]' \
+            '1:review to edit:_prr_reviews'
+          ;;
 
-    apply)
-      _arguments \
-        '1:pull request (eg. danobi/prr/24):'
-      ;;
+        submit)
+          _arguments \
+            '(-h --help)'{-h,--help}'[Print help information]' \
+            '(-d --debug)'{-d,--debug}'[Print debug output while submitting]' \
+            '1:review to submit:_prr_reviews'
+          ;;
 
-    status)
-      _arguments \
-        '(-n --no-titles)'{-n,--no-titles}'[Hide column titles from output]'
-      ;;
+        apply)
+          _arguments \
+            '(-h --help)'{-h,--help}'[Print help information]' \
+            '1:pull request (eg. danobi/prr/24):'
+          ;;
 
-    remove)
-      _arguments \
-        '(-f --force)'{-f,--force}'[Ignore unsubmitted review checks]' \
-        '(-s --submitted)'{-s,--submitted}'[Remove submitted reviews in addition to provided reviews]' \
-        '1:review to remove:_prr_reviews' \
-        '*:additional reviews:_prr_reviews'
+        status)
+          _arguments \
+            '(-h --help)'{-h,--help}'[Print help information]' \
+            '(-n --no-titles)'{-n,--no-titles}'[Hide column titles from output]' \
+            '1::status argument:'
+          ;;
+
+        remove)
+          _arguments \
+            '(-h --help)'{-h,--help}'[Print help information]' \
+            '(-f --force)'{-f,--force}'[Ignore unsubmitted review checks]' \
+            '(-s --submitted)'{-s,--submitted}'[Remove submitted reviews in addition to provided reviews]' \
+            '1:review to remove:_prr_reviews'
+          ;;
+      esac
       ;;
   esac
 }
