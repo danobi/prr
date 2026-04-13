@@ -101,6 +101,8 @@ The following local configuration options are supported:
 * `[local]`
     * [`repository`](#the-repository-field)
     * [`workdir`](#the-local-workdir-field)
+    * [`upstream_remote`](#the-upstream_remote-field)
+    * [`origin_remote`](#the-origin_remote-field)
 
 ### The `repository` field
 
@@ -110,12 +112,45 @@ The optional `repository` field takes a string in format of
 If specified, you may omit the `${ORG}/${REPO}` from PR string arguments.
 For example, you may run `prr get 6` instead of `prr get danobi/prr/6`.
 
+> [!TIP]
+> As an alternative to configuring this field, you can omit the PR
+> argument entirely when running from a git repository. If you're on a branch
+> that has an associated PR, `prr` will auto-detect the owner, repo, and PR
+> number from the git remote and current branch name. This works with fork
+> workflows too — `prr` uses `upstream` (if present) to identify the repository,
+> and `origin` to identify your fork.
+
 
 Example:
 
 ```toml
 [local]
 repository = "danobi/prr"
+```
+
+### The `upstream_remote` field
+
+The optional `upstream_remote` field overrides the git remote name that `prr`
+treats as the upstream repository when auto-detecting PRs. Defaults to
+`"upstream"`.
+
+Example:
+
+```toml
+[local]
+upstream_remote = "main-repo"
+```
+
+### The `origin_remote` field
+
+The optional `origin_remote` field overrides the git remote name that `prr`
+treats as your fork when auto-detecting PRs. Defaults to `"origin"`.
+
+Example:
+
+```toml
+[local]
+origin_remote = "my-fork"
 ```
 
 ### The local `workdir` field
