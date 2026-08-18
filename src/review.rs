@@ -227,6 +227,7 @@ impl Review {
     /// `review_file` is the path where the user-facing review file should
     /// be created. Additional metadata files (dotfiles) may be created in the same
     /// directory.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         workdir: &Path,
         diff: String,
@@ -268,7 +269,7 @@ impl Review {
             .open(&review_path)
             .context("Failed to create review file")?;
 
-        let mut description = pr_description.unwrap_or_else(String::default);
+        let mut description = pr_description.unwrap_or_default();
         if !description.is_empty() {
             description += "\n";
         }
@@ -607,7 +608,6 @@ mod tests {
 
         // Do a "review"
         let mut file = OpenOptions::new()
-            .write(true)
             .append(true)
             .open(r.path())
             .expect("Failed to open review file");
