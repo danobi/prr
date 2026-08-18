@@ -9,7 +9,8 @@ The review action (approve / request changes / comment) still applies.
 ## Install
 
 ```
-brew tap tineoc/prr https://github.com/tineoc/prr
+brew tap tineoc/prr https://github.com/TineoC/prr
+brew trust tineoc/prr
 brew install --HEAD prr-suggest
 ```
 
