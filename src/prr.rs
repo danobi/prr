@@ -11,8 +11,9 @@ use prettytable::{format, row, Table};
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 
-use crate::parser::{FileComment, LineLocation, ReviewAction};
+use crate::parser::{LineLocation, ReviewAction};
 use crate::review::{get_all_existing, Review, ReviewStatus};
+use crate::suggestion::only_suggestions;
 use regex::Regex;
 
 // Use lazy static to ensure regex is only compiled once
@@ -310,17 +311,25 @@ impl Prr {
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let (review_action, review_comment, inline_comments, file_comments) = review.comments()?;
+        let (review_action, _review_comment, inline_comments, _file_comments) = review.comments()?;
 
-        if review_comment.is_empty()
-            && inline_comments.is_empty()
-            && review_action != ReviewAction::Approve
-        {
-            bail!("No review comments");
+        // This fork posts code suggestions only: the review-level comment,
+        // file-level comments, and any prose around a ```suggestion block are
+        // all dropped.
+        let inline_comments: Vec<_> = inline_comments
+            .into_iter()
+            .filter_map(|mut c| {
+                c.comment = only_suggestions(&c.comment)?;
+                Some(c)
+            })
+            .collect();
+
+        if inline_comments.is_empty() && review_action != ReviewAction::Approve {
+            bail!("No code suggestions to submit");
         }
 
         let mut body = json!({
-            "body": review_comment,
+            "body": "",
             "event": match review_action {
                 ReviewAction::Approve => "APPROVE",
                 ReviewAction::RequestChanges => "REQUEST_CHANGES",
@@ -360,10 +369,6 @@ impl Prr {
             if let serde_json::Value::Object(ref mut obj) = body {
                 obj.insert("commit_id".to_string(), json!(id));
             }
-        } else if !file_comments.is_empty() {
-            bail!(
-                "Metadata contained no commit_id, but it's required to leave file-level comments"
-            );
         }
 
         if debug {
@@ -371,11 +376,6 @@ impl Prr {
         }
         self.submit_review(&review, owner, repo, pr_num, &body)
             .await?;
-
-        for fc in &file_comments {
-            self.submit_file_comment(owner, repo, pr_num, commit.as_ref().unwrap(), fc)
-                .await?
-        }
 
         Ok(())
     }
@@ -424,50 +424,6 @@ impl Prr {
         }
     }
 
-    async fn submit_file_comment(
-        &self,
-        owner: &str,
-        repo: &str,
-        pr_num: u64,
-        commit_id: &str,
-        fc: &FileComment,
-    ) -> Result<()> {
-        let body = json!({
-            "body": fc.comment,
-            "commit_id": commit_id,
-            "path": fc.file,
-            "subject_type": "file",
-        });
-        let path = format!("/repos/{}/{}/pulls/{}/comments", owner, repo, pr_num);
-        let uri = Uri::builder()
-            .path_and_query(path)
-            .build()
-            .context("Invalid URI")?;
-        match self.crab._post(uri, Some(&body)).await {
-            Ok(resp) => {
-                let status = resp.status();
-                if status != StatusCode::CREATED {
-                    let text = self
-                        .crab
-                        .body_to_string(resp)
-                        .await
-                        .context("Failed to decode failed response")?;
-                    bail!("Error during POST: Status code: {}, Body: {}", status, text);
-                }
-                Ok(())
-            }
-            // GH is known to send unescaped control characters in JSON responses which
-            // serde will fail to parse (not that it should succeed)
-            Err(octocrab::Error::Json {
-                source: _,
-                backtrace: _,
-            }) => {
-                eprintln!("Warning: GH response had invalid JSON");
-                Ok(())
-            }
-            Err(e) => bail!("Error during POST: {}", e),
-        }
-    }
 
     pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64, apply_repo: &Path) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);

@@ -9,6 +9,7 @@ mod cli;
 mod parser;
 mod prr;
 mod review;
+mod suggestion;
 
 use cli::*;
 use prr::Prr;
