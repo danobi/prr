@@ -311,7 +311,8 @@ impl Prr {
 
     pub async fn submit_pr(&self, owner: &str, repo: &str, pr_num: u64, debug: bool) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
-        let (review_action, _review_comment, inline_comments, _file_comments) = review.comments()?;
+        let (review_action, _review_comment, inline_comments, _file_comments) =
+            review.comments()?;
 
         // This fork posts code suggestions only: the review-level comment,
         // file-level comments, and any prose around a ```suggestion block are
@@ -423,7 +424,6 @@ impl Prr {
             Err(e) => bail!("Error during POST: {}", e),
         }
     }
-
 
     pub fn apply_pr(&self, owner: &str, repo: &str, pr_num: u64, apply_repo: &Path) -> Result<()> {
         let review = Review::new_existing(&self.workdir()?, owner, repo, pr_num);
