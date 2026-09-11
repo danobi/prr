@@ -15,7 +15,8 @@ brew install --HEAD prr-suggest
 ```
 
 The binary installs as `prr-suggest` so it can coexist with upstream `prr`.
-From source: `just install` (or `cargo install --path .`).
+From source: `just install` (or `cargo install --path .`). Without system
+OpenSSL headers (`libssl-dev`), add `--features vendored-openssl`.
 
 ---
 

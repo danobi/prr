@@ -1,0 +1,16 @@
+> diff --git a/foo.rs b/foo.rs
+> new file mode 100644
+> index 0000000..bfa7b6a
+> --- /dev/null
+> +++ b/foo.rs
+> @@ -0,0 +1,4 @@
+
+> +one
+> +two
+
+Comment 1
+
+> +three
+> +four
+
+Comment 2

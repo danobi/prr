@@ -111,6 +111,16 @@ struct FileDiffState {
     /// First line of the span. See `LineLocation` for docs on
     /// semantics of `line`
     span_start_line: Option<LineLocation>,
+    /// Span was opened by a blank line trailing a comment rather than a blank
+    /// line after a quoted line. Silently dropped if no comment terminates it.
+    span_tentative: bool,
+}
+
+impl FileDiffState {
+    /// Span start for a comment attached here. A one-line span is a plain inline comment.
+    fn span_start(&self) -> Option<LineLocation> {
+        self.span_start_line.clone().filter(|s| *s != self.line)
+    }
 }
 
 struct SpanStartOrCommentState {
@@ -339,6 +349,7 @@ impl ReviewParser {
                             LineLocation::Right(right_start)
                         },
                         span_start_line: None,
+                        span_tentative: false,
                     });
 
                     if let Some(comment) = comment {
@@ -351,7 +362,7 @@ impl ReviewParser {
             State::FileDiff(state) => {
                 if is_quoted {
                     if is_diff_header(line) {
-                        if state.span_start_line.is_some() {
+                        if state.span_start_line.is_some() && !state.span_tentative {
                             bail!(
                                 "Detected span that was not terminated with a comment, file: {}",
                                 state.file
@@ -364,9 +375,11 @@ impl ReviewParser {
                         });
                     } else if let Some((mut left_start, mut right_start)) = parse_hunk_start(line)?
                     {
-                        if state.span_start_line.is_some() {
+                        if state.span_start_line.is_some() && !state.span_tentative {
                             bail!("Detected cross chunk span, file: {}", state.file);
                         }
+                        state.span_start_line = None;
+                        state.span_tentative = false;
 
                         // Subtract 1 b/c this line is before the actual diff hunk
                         left_start = left_start.saturating_sub(1);
@@ -412,7 +425,9 @@ impl ReviewParser {
             }
             State::SpanStartOrComment(state) => {
                 if is_quoted {
-                    if state.file_diff_state.span_start_line.is_some() {
+                    if state.file_diff_state.span_start_line.is_some()
+                        && !state.file_diff_state.span_tentative
+                    {
                         bail!(
                             "Detected span that was not terminated with a comment, file: {}",
                             state.file_diff_state.file
@@ -439,6 +454,7 @@ impl ReviewParser {
                         } else {
                             LineLocation::Right(next_right)
                         }),
+                        span_tentative: false,
                     });
 
                     Ok(None)
@@ -457,10 +473,13 @@ impl ReviewParser {
             }
             State::Comment(state) => {
                 if is_quoted {
+                    // A blank line between the comment and the next quoted line starts a
+                    // new span, same as a blank line after a quoted line does.
+                    let starts_span = state.comment.last().is_some_and(|l| l.trim().is_empty());
                     let comment = Comment::Inline(InlineComment {
                         file: state.file_diff_state.file.clone(),
                         line: state.file_diff_state.line.clone(),
-                        start_line: state.file_diff_state.span_start_line.clone(),
+                        start_line: state.file_diff_state.span_start(),
                         comment: state.comment.join("\n").trim_end().to_string(),
                     });
 
@@ -475,16 +494,18 @@ impl ReviewParser {
                             state.file_diff_state.left_line,
                             state.file_diff_state.right_line,
                         );
+                        let loc = if is_left_line(line) {
+                            LineLocation::Left(next_left)
+                        } else {
+                            LineLocation::Right(next_right)
+                        };
                         self.state = State::FileDiff(FileDiffState {
                             file: state.file_diff_state.file.to_owned(),
                             left_line: next_left,
                             right_line: next_right,
-                            line: if is_left_line(line) {
-                                LineLocation::Left(next_left)
-                            } else {
-                                LineLocation::Right(next_right)
-                            },
-                            span_start_line: None,
+                            line: loc.clone(),
+                            span_start_line: starts_span.then_some(loc),
+                            span_tentative: starts_span,
                         });
                     }
 
@@ -500,9 +521,9 @@ impl ReviewParser {
     pub fn finish(self) -> Option<Comment> {
         match self.state {
             State::Comment(state) => Some(Comment::Inline(InlineComment {
+                start_line: state.file_diff_state.span_start(),
                 file: state.file_diff_state.file,
                 line: state.file_diff_state.line,
-                start_line: state.file_diff_state.span_start_line,
                 comment: state.comment.join("\n").trim_end().to_string(),
             })),
             _ => None,
@@ -657,7 +678,28 @@ mod tests {
             Comment::Inline(InlineComment {
                 file: "libbpf-cargo/src/btf/btf.rs".to_string(),
                 line: LineLocation::Right(737),
-                start_line: None,
+                start_line: Some(LineLocation::Right(735)),
+                comment: "Comment 2".to_string(),
+            }),
+        ];
+
+        test(input, &expected);
+    }
+
+    #[test]
+    fn span_after_comment() {
+        let input = include_str!("../testdata/span_after_comment");
+        let expected = vec![
+            Comment::Inline(InlineComment {
+                file: "foo.rs".to_string(),
+                line: LineLocation::Right(2),
+                start_line: Some(LineLocation::Right(1)),
+                comment: "Comment 1".to_string(),
+            }),
+            Comment::Inline(InlineComment {
+                file: "foo.rs".to_string(),
+                line: LineLocation::Right(4),
+                start_line: Some(LineLocation::Right(3)),
                 comment: "Comment 2".to_string(),
             }),
         ];
