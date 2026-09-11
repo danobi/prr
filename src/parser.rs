@@ -178,12 +178,7 @@ fn is_diff_header(s: &str) -> bool {
 ///
 /// Returns Some(directive) if found, else None
 fn is_prr_directive(s: &str) -> Option<&str> {
-    let t = s.trim();
-    if let Some(d) = t.strip_prefix("@prr ") {
-        Some(d)
-    } else {
-        None
-    }
+    s.trim().strip_prefix("@prr ")
 }
 
 /// Parses the new filename out of a diff header
