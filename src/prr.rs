@@ -388,7 +388,7 @@ impl Prr {
         pr_num: u64,
         body: &Value,
     ) -> Result<()> {
-        let path = format!("repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
+        let path = format!("/repos/{}/{}/pulls/{}/reviews", owner, repo, pr_num);
         let uri = Uri::builder()
             .path_and_query(path)
             .build()
@@ -438,7 +438,7 @@ impl Prr {
             "path": fc.file,
             "subject_type": "file",
         });
-        let path = format!("repos/{}/{}/pulls/{}/comments", owner, repo, pr_num);
+        let path = format!("/repos/{}/{}/pulls/{}/comments", owner, repo, pr_num);
         let uri = Uri::builder()
             .path_and_query(path)
             .build()
