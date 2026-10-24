@@ -15,9 +15,21 @@ $ prr get danobi/prr-test-repo/6
 /home/dxu/dev/review/danobi/prr-test-repo/6.prr
 ```
 
-`prr-get` downloads a pull request onto your filesystem into what we call a
+`prr get` downloads a pull request onto your filesystem into what we call a
 "review file". On success, the path to the review file is printed to your
 terminal.
+
+> [!TIP]
+> If you're inside a git clone on a branch that has an associated PR,
+> you can omit the PR argument entirely—`prr` will auto-detect the repository
+> and PR number from the git remote and current branch:
+>
+> ```sh
+> $ prr get
+> ```
+>
+> This works with fork workflows too: `prr` uses the `upstream` remote (if present)
+> to identify the repository, and the `origin` remote to identify your fork.
 
 But to be sure, let's check our status:
 
@@ -32,12 +44,14 @@ Great! We've confirmed the review was downloaded.
 ### Mark up the review file
 
 Now that the review file is downloaded, let's mark it up. You can open
-the review file in your favorite editor or use `prr-edit` to automatically
+the review file in your favorite editor or use `prr edit` to automatically
 open it in `$EDITOR`.
 
 ```
 $ prr edit danobi/prr-test-repo/6
 ```
+
+(Or just `prr edit` if you're on the PR's branch.)
 
 Your editor should show the contents as something like this:
 
@@ -133,6 +147,8 @@ Do this by running:
 ```sh
 $ prr submit danobi/prr-test-repo/6
 ```
+
+(Or just `prr submit` if you're on the PR's branch.)
 
 On success there will not be any output. But just to be safe, let's confirm
 submission status:

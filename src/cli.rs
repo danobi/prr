@@ -8,21 +8,21 @@ pub(crate) enum Command {
         /// Ignore unsubmitted review checks
         #[clap(short, long)]
         force: bool,
-        /// Pull request to review (eg. `danobi/prr/24`)
-        pr: String,
+        /// Pull request to review (eg. `danobi/prr/24`). Auto-detected if omitted.
+        pr: Option<String>,
         /// Open review file in $EDITOR after download
         #[clap(long)]
         open: bool,
     },
     /// Open an existing review in $EDITOR
     Edit {
-        /// Pull request to edit (eg. `danobi/prr/24`)
-        pr: String,
+        /// Pull request to edit (eg. `danobi/prr/24`). Auto-detected if omitted.
+        pr: Option<String>,
     },
     /// Submit a review
     Submit {
-        /// Pull request to review (eg. `danobi/prr/24`)
-        pr: String,
+        /// Pull request to review (eg. `danobi/prr/24`). Auto-detected if omitted.
+        pr: Option<String>,
         #[clap(short, long)]
         debug: bool,
     },
